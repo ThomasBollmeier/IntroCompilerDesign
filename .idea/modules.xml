@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/IntroCompilerDesign.iml" filepath="$PROJECT_DIR$/IntroCompilerDesign.iml" />
+      <module fileurl="file://$PROJECT_DIR$/compiler/compiler.iml" filepath="$PROJECT_DIR$/compiler/compiler.iml" />
+      <module fileurl="file://$PROJECT_DIR$/cprl/cprl.iml" filepath="$PROJECT_DIR$/cprl/cprl.iml" />
+      <module fileurl="file://$PROJECT_DIR$/cvm/cvm.iml" filepath="$PROJECT_DIR$/cvm/cvm.iml" />
+    </modules>
+  </component>
+</project>
