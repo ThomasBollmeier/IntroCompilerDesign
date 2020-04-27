@@ -16,13 +16,16 @@ class Scanner(private val source: Source) {
     /**
      * Returns a reference to the position of the current symbol in the source file.
      */
-    var position: Position? = null
+    private var position: Position? = null
         private set
     private var text: String? = null
-    private val scanBuffer: StringBuilder
+    private val scanBuffer: StringBuilder = StringBuilder(100)
     private val reservedWords = Symbol.values()
         .filter { it.isReservedWord }
         .associateBy { it.toString() }
+    private val operators = Symbol.values()
+            .filter { it.toString().length == 1 }
+            .associateBy { it.toString() }
 
     /**
      * Returns a copy of the current token in the source file.
@@ -61,16 +64,8 @@ class Scanner(private val source: Source) {
                         symbol = Symbol.stringLiteral
                         text = scanStringLiteral()
                     }
-                    '+' -> {
-                        symbol = Symbol.plus
-                        source.advance()
-                    }
-                    '-' -> {
-                        symbol = Symbol.minus
-                        source.advance()
-                    }
-                    '*' -> {
-                        symbol = Symbol.times
+                    '+', '-', '*', '=', '(', ')', '[', ']', ',', ';', '.' -> {
+                        symbol = operators[source.char.toChar().toString()]
                         source.advance()
                     }
                     '/' -> {
@@ -82,18 +77,13 @@ class Scanner(private val source: Source) {
                             advance()
                         }
                     }
-                    '=' -> {
-                        symbol = Symbol.equals
-                        source.advance()
-                    }
                     '!' -> {
                         source.advance()
                         if (source.char.toChar() == '=') {
                             symbol = Symbol.notEqual
                             source.advance()
                         } else {
-                            val errorMsg = ("Invalid character '${ source.char.toChar() }'")
-                            source.advance()
+                            val errorMsg = ("Invalid character '!'")
                             throw error(errorMsg)
                         }
                     }
@@ -117,34 +107,6 @@ class Scanner(private val source: Source) {
                             symbol = Symbol.assign
                             source.advance()
                         } else symbol = Symbol.colon
-                    }
-                    '(' -> {
-                        symbol = Symbol.leftParen
-                        source.advance()
-                    }
-                    ')' -> {
-                        symbol = Symbol.rightParen
-                        source.advance()
-                    }
-                    '[' -> {
-                        symbol = Symbol.leftBracket
-                        source.advance()
-                    }
-                    ']' -> {
-                        symbol = Symbol.rightBracket
-                        source.advance()
-                    }
-                    ',' -> {
-                        symbol = Symbol.comma
-                        source.advance()
-                    }
-                    ';' -> {
-                        symbol = Symbol.semicolon
-                        source.advance()
-                    }
-                    '.' -> {
-                        symbol = Symbol.dot
-                        source.advance()
                     }
                     else -> {
                         val errorMsg = ("Invalid character \'"
@@ -295,6 +257,7 @@ class Scanner(private val source: Source) {
         source.advance()
 
         do {
+            checkGraphicChar(source.char)
             ch = source.char.toChar()
             when (ch) {
                 '\\' -> scanBuffer.append(scanEscapedChar())
@@ -470,7 +433,6 @@ class Scanner(private val source: Source) {
      * to the first token.
      */
     init {
-        scanBuffer = StringBuilder(100)
         advance() // advance to the first token
     }
 }
