@@ -19,7 +19,7 @@ writeln
 :=   (   )   [   ]   ,   :   ;   .
 
 // identifiers
-x   y   x1   i   aVeryLongIdentifier
+x   y   x1   i   aVeryLongIdentifier my_variable
 
 // identifiers that look like reserved words (CPRL is case sensitive)
 IF   While   LOOP   End   Array   TYPE

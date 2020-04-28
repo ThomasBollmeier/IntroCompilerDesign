@@ -7,123 +7,152 @@ import edu.citadel.compiler.Source
 import java.io.IOException
 
 class Scanner(private val source: Source) {
-    /**
-     * Returns a reference to the current symbol in the source file.
-     */
-    var symbol: Symbol? = null
-        private set
 
-    /**
-     * Returns a reference to the position of the current symbol in the source file.
-     */
-    private var position: Position? = null
-        private set
-    private var text: String? = null
     private val scanBuffer: StringBuilder = StringBuilder(100)
     private val reservedWords = Symbol.values()
-        .filter { it.isReservedWord }
-        .associateBy { it.toString() }
-    private val operators = Symbol.values()
+            .filter { it.isReservedWord }
+            .associateBy { it.toString() }
+    private val singleCharSymbols = Symbol.values()
             .filter { it.toString().length == 1 }
             .associateBy { it.toString() }
+
+    private val tokenBuffer = mutableListOf<Token>()
+
+    private var position : Position? = null
 
     /**
      * Returns a copy of the current token in the source file.
      */
-    val token: Token
-        get() = Token(symbol, position, text)
+    val token
+        get() = tokenBuffer.getOrNull(0)
+
+    val symbol
+        get() = peekSymbol(0)
+
+    fun peekToken(idx: Int) : Token? {
+        while (tokenBuffer.size < idx) {
+            var token = nextToken()
+            tokenBuffer.add(token)
+            if (token.symbol == Symbol.EOF) {
+                break
+            }
+        }
+
+        return tokenBuffer.getOrNull(idx)
+    }
+
+    fun peekSymbol(idx: Int) = peekToken(idx)?.symbol
 
     /**
      * Advance to the next token in the source file.
      */
     @Throws(IOException::class)
     fun advance() {
-        try {
-            skipWhiteSpace()
+        if (tokenBuffer.isNotEmpty()) {
+            tokenBuffer.removeAt(0)
+        }
+        tokenBuffer.add(nextToken())
+    }
 
-            // currently at starting character of next token
-            position = source.charPosition
-            text = null
-            if (source.char == Source.EOF) {
-                // set symbol but don't advance
-                symbol = Symbol.EOF
-            } else if (Character.isLetter(source.char.toChar())) {
-                val idString = scanIdentifier()
-                symbol = getIdentifierSymbol(idString)
-                if (symbol == Symbol.identifier) text = idString
-            } else if (Character.isDigit(source.char.toChar())) {
-                symbol = Symbol.intLiteral
-                text = scanIntegerLiteral()
-            } else {
-                when (source.char.toChar()) {
-                    '\'' -> {
-                        symbol = Symbol.charLiteral
-                        text = scanCharLiteral()
-                    }
-                    '\"' -> {
-                        symbol = Symbol.stringLiteral
-                        text = scanStringLiteral()
-                    }
-                    '+', '-', '*', '=', '(', ')', '[', ']', ',', ';', '.' -> {
-                        symbol = operators[source.char.toChar().toString()]
-                        source.advance()
-                    }
-                    '/' -> {
-                        source.advance()
-                        if (source.char.toChar() != '/') {
-                            symbol = Symbol.divide
-                        } else {
-                            skipComment()
-                            advance()
+    private fun nextToken() : Token {
+
+        var symbol: Symbol? = null
+        position = null
+        var text: String? = null
+
+        advanceloop@ while (true) {
+
+            try {
+                skipWhiteSpace()
+
+                // currently at starting character of next token
+                position = source.charPosition
+                text = null
+                if (source.char == Source.EOF) {
+                    // set symbol but don't advance
+                    symbol = Symbol.EOF
+                } else if (Character.isLetter(source.char.toChar())) {
+                    val idString = scanIdentifier()
+                    symbol = getIdentifierSymbol(idString)
+                    if (symbol == Symbol.identifier) text = idString
+                } else if (Character.isDigit(source.char.toChar())) {
+                    symbol = Symbol.intLiteral
+                    text = scanIntegerLiteral()
+                } else {
+                    when (source.char.toChar()) {
+                        '\'' -> {
+                            symbol = Symbol.charLiteral
+                            text = scanCharLiteral()
                         }
-                    }
-                    '!' -> {
-                        source.advance()
-                        if (source.char.toChar() == '=') {
-                            symbol = Symbol.notEqual
+                        '\"' -> {
+                            symbol = Symbol.stringLiteral
+                            text = scanStringLiteral()
+                        }
+                        '+', '-', '*', '=', '(', ')', '[', ']', ',', ';', '.' -> {
+                            symbol = singleCharSymbols[source.char.toChar().toString()]
                             source.advance()
-                        } else {
-                            val errorMsg = ("Invalid character '!'")
+                        }
+                        '/' -> {
+                            source.advance()
+                            if (source.char.toChar() != '/') {
+                                symbol = Symbol.divide
+                            } else {
+                                skipComment()
+                                continue@advanceloop
+                            }
+                        }
+                        '!' -> {
+                            source.advance()
+                            if (source.char.toChar() == '=') {
+                                symbol = Symbol.notEqual
+                                source.advance()
+                            } else {
+                                val errorMsg = ("Invalid character '!'")
+                                throw error(errorMsg)
+                            }
+                        }
+                        '>' -> {
+                            source.advance()
+                            if (source.char.toChar() == '=') {
+                                symbol = Symbol.greaterOrEqual
+                                source.advance()
+                            } else symbol = Symbol.greaterThan
+                        }
+                        '<' -> {
+                            source.advance()
+                            if (source.char.toChar() == '=') {
+                                symbol = Symbol.lessOrEqual
+                                source.advance()
+                            } else symbol = Symbol.lessThan
+                        }
+                        ':' -> {
+                            source.advance()
+                            if (source.char.toChar() == '=') {
+                                symbol = Symbol.assign
+                                source.advance()
+                            } else symbol = Symbol.colon
+                        }
+                        else -> {
+                            val errorMsg = ("Invalid character \'"
+                                    + source.char.toChar() + "\'")
+                            source.advance()
                             throw error(errorMsg)
                         }
                     }
-                    '>' -> {
-                        source.advance()
-                        if (source.char.toChar() == '=') {
-                            symbol = Symbol.greaterOrEqual
-                            source.advance()
-                        } else symbol = Symbol.greaterThan
-                    }
-                    '<' -> {
-                        source.advance()
-                        if (source.char.toChar() == '=') {
-                            symbol = Symbol.lessOrEqual
-                            source.advance()
-                        } else symbol = Symbol.lessThan
-                    }
-                    ':' -> {
-                        source.advance()
-                        if (source.char.toChar() == '=') {
-                            symbol = Symbol.assign
-                            source.advance()
-                        } else symbol = Symbol.colon
-                    }
-                    else -> {
-                        val errorMsg = ("Invalid character \'"
-                                + source.char.toChar() + "\'")
-                        source.advance()
-                        throw error(errorMsg)
-                    }
                 }
-            }
-        } catch (e: ScannerException) {
-            ErrorHandler.getInstance().reportError(e)
+            } catch (e: ScannerException) {
+                ErrorHandler.getInstance().reportError(e)
 
-            // set token to either EOF or unknown
-            if (source.char == Source.EOF) {
-                if (symbol != Symbol.EOF) symbol = Symbol.EOF
-            } else symbol = Symbol.unknown
+                // set token to either EOF or unknown
+                if (source.char == Source.EOF) {
+                    if (symbol != Symbol.EOF) symbol = Symbol.EOF
+                } else symbol = Symbol.unknown
+            }
+
+            break@advanceloop
         }
+
+        return Token(symbol, position, text)
     }
 
     /**
@@ -131,7 +160,7 @@ class Scanner(private val source: Source) {
      * (Symbol.arrayRW, Symbol.ifRW, Symbol.identifier, etc.)
      */
     private fun getIdentifierSymbol(idString: String): Symbol =
-        reservedWords[idString] ?: Symbol.identifier
+            reservedWords[idString] ?: Symbol.identifier
 
     /**
      * Skip over a comment.
@@ -161,9 +190,9 @@ class Scanner(private val source: Source) {
     fun advanceTo(symbols: Array<Symbol>) {
         while (true) {
             if (search(
-                    symbols,
-                    symbol
-                ) >= 0 || source.char == Source.EOF
+                            symbols,
+                            symbol
+                    ) >= 0 || source.char == Source.EOF
             ) return else advance()
         }
     }
@@ -207,7 +236,7 @@ class Scanner(private val source: Source) {
             scanBuffer.append(ch)
             source.advance()
             ch = source.char.toChar()
-        } while (Character.isLetterOrDigit(ch))
+        } while (Character.isLetterOrDigit(ch) || ch == '_')
 
         return scanBuffer.toString()
     }
@@ -285,7 +314,7 @@ class Scanner(private val source: Source) {
     private fun scanCharLiteral(): String {
         // assumes that source.getChar() is the opening single quote for the char literal
         assert(
-            source.char.toChar() == '\''
+                source.char.toChar() == '\''
         ) { "scanCharLiteral(): check for opening quote (\') at position $position" }
         val errorMsg = "Invalid Char literal."
         clearScanBuffer()
@@ -394,15 +423,15 @@ class Scanner(private val source: Source) {
     @Throws(ScannerException::class)
     private fun checkGraphicChar(n: Int) {
         if (n == Source.EOF) throw error("End of file reached before closing quote for Char or String literal.") else if (n > 0xffff) throw error(
-            "Character not in Unicode Basic Multilingual Pane (BMP)"
+                "Character not in Unicode Basic Multilingual Pane (BMP)"
         ) else {
             val c = n.toChar()
             if (c == '\r' || c == '\n') throw error("Char and String literals can not extend past end of line.") else if (Character.isISOControl(
-                    c
-                )
+                            c
+                    )
             ) throw ScannerException(
-                source.charPosition,
-                "Control characters not allowed in Char or String literal."
+                    source.charPosition,
+                    "Control characters not allowed in Char or String literal."
             )
         }
     }
@@ -423,8 +452,8 @@ class Scanner(private val source: Source) {
     @Throws(ScannerException::class)
     private fun checkEOF() {
         if (source.char == Source.EOF) throw ScannerException(
-            position,
-            "Unexpected end of file"
+                position,
+                "Unexpected end of file"
         )
     }
 
