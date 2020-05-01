@@ -30,7 +30,7 @@ class Scanner(private val source: Source) {
         get() = peekSymbol(0)
 
     fun peekToken(idx: Int) : Token? {
-        while (tokenBuffer.size < idx) {
+        while (tokenBuffer.size < idx + 1) {
             var token = nextToken()
             tokenBuffer.add(token)
             if (token.symbol == Symbol.EOF) {
