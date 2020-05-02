@@ -56,7 +56,25 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseInitialDecl() {
-// ...   throw an internal error if the symbol is not one of constRW, varRW, or typeRW
+        try {
+            when (scanner.symbol) {
+                Symbol.constRW -> {
+                    parseConstDecl()
+                }
+                Symbol.typeRW -> {
+                    parseArrayTypeDecl()
+                }
+                Symbol.varRW -> {
+                    parseVarDecl()
+                }
+                else -> {
+                    throw error("Unexpected symbol '${scanner.symbol}'")
+                }
+            }
+        } catch (e: ParserException) {
+            ErrorHandler.getInstance().reportError(e)
+            exit()
+        }
     }
 
     /**
@@ -65,7 +83,18 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseConstDecl() {
-// ...
+        try {
+            matchCurrentSymbol()
+            val constId = scanner.token
+            match(Symbol.identifier)
+            idTable.add(constId, IdType.constantId)
+            match(Symbol.assign)
+            parseLiteral()
+            match(Symbol.semicolon)
+        } catch (e: ParserException) {
+            ErrorHandler.getInstance().reportError(e)
+            exit()
+        }
     }
 
     /**
@@ -146,16 +175,24 @@ class Parser(private val scanner: Scanner) {
     @Throws(IOException::class)
     fun parseTypeName() {
         try {
-            if (scanner.symbol == Symbol.IntegerRW) matchCurrentSymbol() else if (scanner.symbol == Symbol.BooleanRW) matchCurrentSymbol() else if (scanner.symbol == Symbol.CharRW) matchCurrentSymbol() else if (scanner.symbol == Symbol.identifier) {
-                val typeId = scanner.token
-                matchCurrentSymbol()
-                val idType = idTable[typeId]
-                if (idType != null) {
-                    if (idType != IdType.arrayTypeId) throw error(typeId!!.position, "Identifier \""
-                            + typeId + "\" is not a valid type name.")
-                } else throw error(typeId!!.position, "Identifier \""
-                        + typeId + "\" has not been declared.")
-            } else throw error("Invalid type name.")
+            when (scanner.symbol) {
+                Symbol.IntegerRW, Symbol.BooleanRW, Symbol.CharRW -> {
+                    matchCurrentSymbol()
+                }
+                Symbol.identifier -> {
+                    val typeId = scanner.token
+                    matchCurrentSymbol()
+                    val idType = idTable[typeId]
+                    if (idType != null) {
+                        if (idType != IdType.arrayTypeId) throw error(typeId!!.position, "Identifier \""
+                                + typeId + "\" is not a valid type name.")
+                    } else throw error(typeId!!.position, "Identifier \""
+                            + typeId + "\" has not been declared.")
+                }
+                else -> {
+                    throw error("Invalid type name.")
+                }
+            }
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             exit()
