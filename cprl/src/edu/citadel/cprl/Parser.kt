@@ -58,18 +58,10 @@ class Parser(private val scanner: Scanner) {
     fun parseInitialDecl() {
         try {
             when (scanner.symbol) {
-                Symbol.constRW -> {
-                    parseConstDecl()
-                }
-                Symbol.typeRW -> {
-                    parseArrayTypeDecl()
-                }
-                Symbol.varRW -> {
-                    parseVarDecl()
-                }
-                else -> {
-                    throw error("Unexpected symbol '${scanner.symbol}'")
-                }
+                Symbol.constRW -> parseConstDecl()
+                Symbol.typeRW -> parseArrayTypeDecl()
+                Symbol.varRW -> parseVarDecl()
+                else -> throw error("Unexpected symbol '${scanner.symbol}'")
             }
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
@@ -165,7 +157,23 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseArrayTypeDecl() {
-// ...
+        try {
+            matchCurrentSymbol()
+            val typeId = scanner.token
+            match(Symbol.identifier)
+            idTable.add(typeId, IdType.arrayTypeId)
+            match(Symbol.equals)
+            match(Symbol.arrayRW)
+            match(Symbol.leftBracket)
+            parseConstValue()
+            match(Symbol.rightBracket)
+            match(Symbol.ofRW)
+            parseTypeName()
+        } catch (e: ParserException) {
+            ErrorHandler.getInstance().reportError(e)
+            exit()
+        }
+
     }
 
     /**
