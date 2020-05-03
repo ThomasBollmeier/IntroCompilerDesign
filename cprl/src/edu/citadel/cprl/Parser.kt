@@ -76,7 +76,7 @@ class Parser(private val scanner: Scanner) {
     @Throws(IOException::class)
     fun parseConstDecl() {
         try {
-            matchCurrentSymbol()
+            match(Symbol.constRW)
             val constId = scanner.token
             match(Symbol.identifier)
             idTable.add(constId, IdType.constantId)
@@ -87,6 +87,7 @@ class Parser(private val scanner: Scanner) {
             ErrorHandler.getInstance().reportError(e)
             exit()
         }
+
     }
 
     /**
@@ -97,7 +98,10 @@ class Parser(private val scanner: Scanner) {
     @Throws(IOException::class)
     fun parseLiteral() {
         try {
-            if (scanner.symbol!!.isLiteral) matchCurrentSymbol() else throw error("Invalid literal expression")
+            if (scanner.symbol!!.isLiteral)
+                matchCurrentSymbol()
+            else
+                throw error("Invalid literal expression")
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             exit()
@@ -158,7 +162,7 @@ class Parser(private val scanner: Scanner) {
     @Throws(IOException::class)
     fun parseArrayTypeDecl() {
         try {
-            matchCurrentSymbol()
+            match(Symbol.typeRW)
             val typeId = scanner.token
             match(Symbol.identifier)
             idTable.add(typeId, IdType.arrayTypeId)
@@ -213,7 +217,9 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseSubprogramDecls() {
-// ...
+        while (scanner.symbol?.isSubprogramDeclStarter == true) {
+            parseSubprogramDecl()
+        }
     }
 
     /**
@@ -222,6 +228,17 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseSubprogramDecl() {
+        try {
+            when (scanner.symbol) {
+                Symbol.procedureRW -> parseProcedureDecl()
+                Symbol.functionRW -> parseFunctionDecl()
+                else -> throw error("Unexpected symbol '${scanner.symbol}'")
+            }
+        } catch (e: ParserException) {
+            ErrorHandler.getInstance().reportError(e)
+            exit()
+        }
+
 // ...   throw an internal error if the symbol is not one of procedureRW or functionRW
     }
 
@@ -260,7 +277,27 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseFunctionDecl() {
-// ...
+        try {
+            match(Symbol.functionRW)
+            val funcId = scanner.token
+            match(Symbol.identifier)
+            idTable.add(funcId, IdType.functionId)
+            idTable.openScope()
+            if (scanner.symbol == Symbol.leftParen) parseFormalParameters()
+            match(Symbol.returnRW)
+            parseTypeName()
+            match(Symbol.isRW)
+            parseInitialDecls()
+            parseStatementPart()
+            idTable.closeScope()
+            val funcId2 = scanner.token
+            match(Symbol.identifier)
+            if (funcId!!.text != funcId2!!.text) throw error(funcId2.position, "Procedure name mismatch.")
+            match(Symbol.semicolon)
+        } catch (e: ParserException) {
+            ErrorHandler.getInstance().reportError(e)
+            exit()
+        }
     }
 
     /**
@@ -269,7 +306,13 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseFormalParameters() {
-// ...
+        match(Symbol.leftParen)
+        parseParameterDecl()
+        while (scanner.symbol == Symbol.comma) {
+            matchCurrentSymbol()
+            parseParameterDecl()
+        }
+        match(Symbol.rightParen)
     }
 
     /**
@@ -278,7 +321,14 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseParameterDecl() {
-// ...
+        if (scanner.symbol == Symbol.varRW) {
+            matchCurrentSymbol()
+        }
+        val paramId = scanner.token
+        match(Symbol.identifier)
+        idTable.add(paramId, IdType.variableId)
+        match(Symbol.colon)
+        parseTypeName()
     }
 
     /**
@@ -303,7 +353,9 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseStatements() {
-// ...
+        while (scanner.symbol?.isStmtStarter == true) {
+            parseStatement()
+        }
     }
 
     /**
@@ -316,9 +368,23 @@ class Parser(private val scanner: Scanner) {
         // assumes that scanner.getSymbol() can start a statement
         assert(scanner.symbol!!.isStmtStarter) { "Invalid statement." }
 
-// ...
-// How can you parse assignmentStmt and procCallStmt since both start with an identifier?
-// Hint: Use the identifier table.
+        when (scanner.symbol) {
+            Symbol.identifier -> {
+                when (idTable.get(scanner.token)) {
+                    IdType.functionId, IdType.procedureId -> parseProcedureCallStmt()
+                    IdType.variableId -> parseAssignmentStmt()
+                    else -> throw error("Assignment or call statement expected")
+                }
+            }
+            Symbol.ifRW -> parseIfStmt()
+            Symbol.whileRW, Symbol.loopRW -> parseLoopStmt()
+            Symbol.exitRW -> parseExitStmt()
+            Symbol.readRW -> parseReadStmt()
+            Symbol.writeRW -> parseWriteStmt()
+            Symbol.writelnRW -> parseWritelnStmt()
+            Symbol.returnRW -> parseReturnStmt()
+            else -> throw error("Unexpected symbol '${scanner.symbol}'")
+        }
     }
 
     /**
