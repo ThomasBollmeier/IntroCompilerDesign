@@ -8,16 +8,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.ArrayList;
 
-
-/**
- * The types for identifiers stored in the identifier table.
- */
-enum IdType
-  {
-    constantId, variableId, arrayTypeId, procedureId, functionId;
-  }
-
-
 /**
  * A simplified version of an identifier table (also known as a symbol table)
  * used to hold attributes of identifiers in the programming language CPRL.
