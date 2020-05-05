@@ -373,7 +373,7 @@ class Parser(private val scanner: Scanner) {
                 when (idTable.get(scanner.token)) {
                     IdType.functionId, IdType.procedureId -> parseProcedureCallStmt()
                     IdType.variableId -> parseAssignmentStmt()
-                    else -> throw error("Assignment or call statement expected")
+                    else -> throw error("Identifier \"${scanner.token?.text}\" cannot start a statement")
                 }
             }
             Symbol.ifRW -> parseIfStmt()
