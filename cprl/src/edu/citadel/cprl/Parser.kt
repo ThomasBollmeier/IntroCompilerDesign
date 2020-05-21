@@ -12,7 +12,36 @@ import java.util.*
  * the CPRL source language.
  */
 class Parser(private val scanner: Scanner) {
-    private val idTable: IdTable
+
+    companion object {
+        /**
+         * Symbols that can follow an initial declaration.
+         */
+        private val initialDeclFollowers = arrayOf<Symbol>()
+
+        /**
+         * Symbols that can follow a subprogram declaration.
+         */
+        private val subprogDeclFollowers = arrayOf<Symbol>()
+
+        /**
+         * Symbols that can follow a statement.
+         */
+        private val stmtFollowers = arrayOf<Symbol>()
+
+        /**
+         * Symbols that can follow a factor.
+         */
+        private val factorFollowers = arrayOf(
+                Symbol.semicolon, Symbol.loopRW, Symbol.thenRW, Symbol.rightParen,
+                Symbol.andRW, Symbol.orRW, Symbol.equals, Symbol.notEqual,
+                Symbol.lessThan, Symbol.lessOrEqual, Symbol.greaterThan, Symbol.greaterOrEqual,
+                Symbol.plus, Symbol.minus, Symbol.times, Symbol.divide,
+                Symbol.modRW, Symbol.rightBracket, Symbol.comma
+        )
+    }
+
+    private val idTable: IdTable = IdTable()
 
     /**
      * Parse the following grammar rule:<br></br>
@@ -27,7 +56,7 @@ class Parser(private val scanner: Scanner) {
             match(Symbol.EOF)
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            exit()
+            recover(followers = arrayOf(Symbol.EOF))
         }
     }
 
@@ -65,7 +94,7 @@ class Parser(private val scanner: Scanner) {
             }
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            exit()
+            recover(followers = Parser.initialDeclFollowers)
         }
     }
 
@@ -85,7 +114,7 @@ class Parser(private val scanner: Scanner) {
             match(Symbol.semicolon)
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            exit()
+            recover(followers = Parser.initialDeclFollowers)
         }
 
     }
@@ -104,7 +133,7 @@ class Parser(private val scanner: Scanner) {
                 throw error("Invalid literal expression")
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            exit()
+            recover(followers = Parser.factorFollowers)
         }
     }
 
@@ -123,7 +152,7 @@ class Parser(private val scanner: Scanner) {
             for (identifier in identifiers) idTable.add(identifier, IdType.variableId)
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            exit()
+            recover(followers = Parser.initialDeclFollowers)
         }
     }
 
@@ -149,8 +178,8 @@ class Parser(private val scanner: Scanner) {
             identifiers
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            exit()
-            emptyList() // should never execute
+            recover(followers = arrayOf(Symbol.semicolon))
+            emptyList()
         }
     }
 
@@ -175,7 +204,7 @@ class Parser(private val scanner: Scanner) {
             parseTypeName()
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            exit()
+            recover(followers = Parser.initialDeclFollowers)
         }
 
     }
@@ -207,7 +236,8 @@ class Parser(private val scanner: Scanner) {
             }
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            exit()
+            recover(followers = arrayOf(Symbol.semicolon, Symbol.comma,
+                Symbol.rightParen, Symbol.isRW))
         }
     }
 
@@ -236,7 +266,7 @@ class Parser(private val scanner: Scanner) {
             }
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            exit()
+            recover(followers = Parser.subprogDeclFollowers)
         }
 
 // ...   throw an internal error if the symbol is not one of procedureRW or functionRW
@@ -266,7 +296,7 @@ class Parser(private val scanner: Scanner) {
             match(Symbol.semicolon)
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            exit()
+            recover(followers = Parser.subprogDeclFollowers)
         }
     }
 
@@ -296,7 +326,7 @@ class Parser(private val scanner: Scanner) {
             match(Symbol.semicolon)
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            exit()
+            recover(followers = Parser.subprogDeclFollowers)
         }
     }
 
@@ -343,7 +373,7 @@ class Parser(private val scanner: Scanner) {
             match(Symbol.endRW)
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            exit()
+            recover(followers = arrayOf(Symbol.dot, Symbol.identifier))
         }
     }
 
@@ -867,9 +897,11 @@ class Parser(private val scanner: Scanner) {
     }
 
     /**
-     * Construct a parser with the specified scanner.
+     * Advance the scanner until the current symbol is one of the
+     * symbols in the specified array of follows.
      */
-    init {
-        idTable = IdTable()
+    @Throws(IOException::class)
+    private fun recover(followers: Array<Symbol>) {
+        scanner.advanceTo(followers)
     }
 }
