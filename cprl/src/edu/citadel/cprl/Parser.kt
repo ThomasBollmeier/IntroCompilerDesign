@@ -27,7 +27,11 @@ class Parser(private val scanner: Scanner) {
         /**
          * Symbols that can follow a statement.
          */
-        private val stmtFollowers = arrayOf<Symbol>()
+        private val stmtFollowers = arrayOf(
+                Symbol.identifier, Symbol.ifRW, Symbol.whileRW, Symbol.loopRW,
+                Symbol.exitRW, Symbol.readRW, Symbol.writeRW, Symbol.writelnRW,
+                Symbol.returnRW, Symbol.endRW
+        )
 
         /**
          * Symbols that can follow a factor.
@@ -94,7 +98,7 @@ class Parser(private val scanner: Scanner) {
             }
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            recover(followers = Parser.initialDeclFollowers)
+            recover(followers = initialDeclFollowers)
         }
     }
 
@@ -114,7 +118,7 @@ class Parser(private val scanner: Scanner) {
             match(Symbol.semicolon)
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            recover(followers = Parser.initialDeclFollowers)
+            recover(followers = initialDeclFollowers)
         }
 
     }
@@ -133,7 +137,7 @@ class Parser(private val scanner: Scanner) {
                 throw error("Invalid literal expression")
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            recover(followers = Parser.factorFollowers)
+            recover(followers = factorFollowers)
         }
     }
 
@@ -152,7 +156,7 @@ class Parser(private val scanner: Scanner) {
             for (identifier in identifiers) idTable.add(identifier, IdType.variableId)
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            recover(followers = Parser.initialDeclFollowers)
+            recover(followers = initialDeclFollowers)
         }
     }
 
@@ -178,7 +182,7 @@ class Parser(private val scanner: Scanner) {
             identifiers
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            recover(followers = arrayOf(Symbol.semicolon))
+            recover(followers = arrayOf(Symbol.colon))
             emptyList()
         }
     }
@@ -204,7 +208,7 @@ class Parser(private val scanner: Scanner) {
             parseTypeName()
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            recover(followers = Parser.initialDeclFollowers)
+            recover(followers = initialDeclFollowers)
         }
 
     }
@@ -237,7 +241,7 @@ class Parser(private val scanner: Scanner) {
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             recover(followers = arrayOf(Symbol.semicolon, Symbol.comma,
-                Symbol.rightParen, Symbol.isRW))
+                    Symbol.rightParen, Symbol.isRW))
         }
     }
 
@@ -266,7 +270,7 @@ class Parser(private val scanner: Scanner) {
             }
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            recover(followers = Parser.subprogDeclFollowers)
+            recover(followers = subprogDeclFollowers)
         }
 
 // ...   throw an internal error if the symbol is not one of procedureRW or functionRW
@@ -296,7 +300,7 @@ class Parser(private val scanner: Scanner) {
             match(Symbol.semicolon)
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            recover(followers = Parser.subprogDeclFollowers)
+            recover(followers = subprogDeclFollowers)
         }
     }
 
@@ -326,7 +330,7 @@ class Parser(private val scanner: Scanner) {
             match(Symbol.semicolon)
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            recover(followers = Parser.subprogDeclFollowers)
+            recover(followers = subprogDeclFollowers)
         }
     }
 
@@ -398,22 +402,30 @@ class Parser(private val scanner: Scanner) {
         // assumes that scanner.getSymbol() can start a statement
         assert(scanner.symbol!!.isStmtStarter) { "Invalid statement." }
 
-        when (scanner.symbol) {
-            Symbol.identifier -> {
-                when (idTable.get(scanner.token)) {
-                    IdType.functionId, IdType.procedureId -> parseProcedureCallStmt()
-                    IdType.variableId -> parseAssignmentStmt()
-                    else -> throw error("Identifier \"${scanner.token?.text}\" cannot start a statement")
+        try {
+
+            when (scanner.symbol) {
+                Symbol.identifier -> {
+                    when (idTable.get(scanner.token)) {
+                        IdType.functionId, IdType.procedureId -> parseProcedureCallStmt()
+                        IdType.variableId -> parseAssignmentStmt()
+                        else -> throw error("Identifier \"${scanner.token?.text}\" cannot start a statement")
+                    }
                 }
+                Symbol.ifRW -> parseIfStmt()
+                Symbol.whileRW, Symbol.loopRW -> parseLoopStmt()
+                Symbol.exitRW -> parseExitStmt()
+                Symbol.readRW -> parseReadStmt()
+                Symbol.writeRW -> parseWriteStmt()
+                Symbol.writelnRW -> parseWritelnStmt()
+                Symbol.returnRW -> parseReturnStmt()
+                else -> throw error("Unexpected symbol '${scanner.symbol}'")
             }
-            Symbol.ifRW -> parseIfStmt()
-            Symbol.whileRW, Symbol.loopRW -> parseLoopStmt()
-            Symbol.exitRW -> parseExitStmt()
-            Symbol.readRW -> parseReadStmt()
-            Symbol.writeRW -> parseWriteStmt()
-            Symbol.writelnRW -> parseWritelnStmt()
-            Symbol.returnRW -> parseReturnStmt()
-            else -> throw error("Unexpected symbol '${scanner.symbol}'")
+
+        } catch (error: ParserException) {
+            ErrorHandler.getInstance().reportError(error)
+            scanner.advanceTo(Symbol.semicolon)
+            recover(stmtFollowers)
         }
     }
 
@@ -423,15 +435,10 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseAssignmentStmt() {
-        try {
-            parseVariable()
-            match(Symbol.assign)
-            parseExpression()
-            match(Symbol.semicolon)
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
-        }
+        parseVariable()
+        match(Symbol.assign)
+        parseExpression()
+        match(Symbol.semicolon)
     }
 
     /**
@@ -442,26 +449,21 @@ class Parser(private val scanner: Scanner) {
     ` */
     @Throws(IOException::class)
     fun parseIfStmt() {
-        try {
-            match(Symbol.ifRW)
+        match(Symbol.ifRW)
+        parseExpression()
+        match(Symbol.thenRW)
+        parseStatements()
+        while (scanner.symbol == Symbol.elsifRW) {
             parseExpression()
             match(Symbol.thenRW)
             parseStatements()
-            while (scanner.symbol == Symbol.elsifRW) {
-                parseExpression()
-                match(Symbol.thenRW)
-                parseStatements()
-            }
-            if (scanner.symbol == Symbol.elseRW) {
-                parseStatements()
-            }
-            match(Symbol.endRW)
-            match(Symbol.ifRW)
-            match(Symbol.semicolon)
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
         }
+        if (scanner.symbol == Symbol.elseRW) {
+            parseStatements()
+        }
+        match(Symbol.endRW)
+        match(Symbol.ifRW)
+        match(Symbol.semicolon)
     }
 
     /**
@@ -471,20 +473,15 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseLoopStmt() {
-        try {
-            if (scanner.symbol == Symbol.whileRW) {
-                matchCurrentSymbol()
-                parseExpression()
-            }
-            match(Symbol.loopRW)
-            parseStatements()
-            match(Symbol.endRW)
-            match(Symbol.loopRW)
-            match(Symbol.semicolon)
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
+        if (scanner.symbol == Symbol.whileRW) {
+            matchCurrentSymbol()
+            parseExpression()
         }
+        match(Symbol.loopRW)
+        parseStatements()
+        match(Symbol.endRW)
+        match(Symbol.loopRW)
+        match(Symbol.semicolon)
     }
 
     /**
@@ -493,17 +490,12 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseExitStmt() {
-        try {
-            match(Symbol.exitRW)
-            if (scanner.symbol == Symbol.whenRW) {
-                matchCurrentSymbol()
-                parseExpression()
-            }
-            match(Symbol.semicolon)
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
+        match(Symbol.exitRW)
+        if (scanner.symbol == Symbol.whenRW) {
+            matchCurrentSymbol()
+            parseExpression()
         }
+        match(Symbol.semicolon)
     }
 
     /**
@@ -512,14 +504,9 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseReadStmt() {
-        try {
-            match(Symbol.readRW)
-            parseVariable()
-            match(Symbol.semicolon)
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
-        }
+        match(Symbol.readRW)
+        parseVariable()
+        match(Symbol.semicolon)
     }
 
     /**
@@ -528,14 +515,9 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseWriteStmt() {
-        try {
-            match(Symbol.writeRW)
-            parseExpressions()
-            match(Symbol.semicolon)
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
-        }
+        match(Symbol.writeRW)
+        parseExpressions()
+        match(Symbol.semicolon)
     }
 
     /**
@@ -552,7 +534,8 @@ class Parser(private val scanner: Scanner) {
             }
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
-            exit()
+            val exprsFollowers = emptyArray<Symbol>()
+            recover(exprsFollowers)
         }
     }
 
@@ -562,14 +545,9 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseWritelnStmt() {
-        try {
-            match(Symbol.writelnRW)
-            if (scanner.symbol!!.isExprStarter) parseExpressions()
-            match(Symbol.semicolon)
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
-        }
+        match(Symbol.writelnRW)
+        if (scanner.symbol!!.isExprStarter) parseExpressions()
+        match(Symbol.semicolon)
     }
 
     /**
@@ -578,20 +556,15 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseProcedureCallStmt() {
-        try {
-            val idType = idTable.get(scanner.token)
-            if (idType != IdType.procedureId) {
-                throw error("Procedure expected")
-            }
-            match(Symbol.identifier)
-            if (scanner.symbol == Symbol.leftParen) {
-                parseActualParameters()
-            }
-            match(Symbol.semicolon)
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
+        val idType = idTable.get(scanner.token)
+        if (idType != IdType.procedureId) {
+            throw error("Procedure expected")
         }
+        match(Symbol.identifier)
+        if (scanner.symbol == Symbol.leftParen) {
+            parseActualParameters()
+        }
+        match(Symbol.semicolon)
     }
 
     /**
@@ -600,14 +573,9 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseActualParameters() {
-        try {
-            match(Symbol.leftParen)
-            parseExpressions()
-            match(Symbol.rightParen)
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
-        }
+        match(Symbol.leftParen)
+        parseExpressions()
+        match(Symbol.rightParen)
     }
 
     /**
@@ -616,16 +584,11 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseReturnStmt() {
-        try {
-            match(Symbol.returnRW)
-            if (scanner.symbol != Symbol.semicolon) {
-                parseExpression()
-            }
-            match(Symbol.semicolon)
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
+        match(Symbol.returnRW)
+        if (scanner.symbol != Symbol.semicolon) {
+            parseExpression()
         }
+        match(Symbol.semicolon)
     }
 
     /**
@@ -665,12 +628,7 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseVariable() {
-        try {
-            parseVariableExpr()
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
-        }
+        parseVariableExpr()
     }
 
     /**
@@ -694,15 +652,10 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseRelation() {
-        try {
+        parseSimpleExpr()
+        while (scanner.symbol?.isRelationalOperator == true) {
+            matchCurrentSymbol()
             parseSimpleExpr()
-            while (scanner.symbol?.isRelationalOperator == true) {
-                matchCurrentSymbol()
-                parseSimpleExpr()
-            }
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
         }
     }
 
@@ -713,18 +666,13 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseSimpleExpr() {
-        try {
-            if (scanner.symbol?.isAddingOperator == true) {
-                matchCurrentSymbol()
-            }
+        if (scanner.symbol?.isAddingOperator == true) {
+            matchCurrentSymbol()
+        }
+        parseTerm()
+        while (scanner.symbol?.isAddingOperator == true) {
+            matchCurrentSymbol()
             parseTerm()
-            while (scanner.symbol?.isAddingOperator == true) {
-                matchCurrentSymbol()
-                parseTerm()
-            }
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
         }
     }
 
@@ -735,15 +683,10 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseTerm() {
-        try {
+        parseFactor()
+        while (scanner.symbol?.isMultiplyingOperator == true) {
+            matchCurrentSymbol()
             parseFactor()
-            while (scanner.symbol?.isMultiplyingOperator == true) {
-                matchCurrentSymbol()
-                parseFactor()
-            }
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
         }
     }
 
@@ -754,32 +697,32 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseFactor() {
-        try {
-            if (scanner.symbol == Symbol.notRW) {
-                matchCurrentSymbol()
-                parseFactor()
-            } else if (scanner.symbol!!.isLiteral) {
-                // Handle constant literals separately from constant identifiers.
-                parseConstValue()
-            } else if (scanner.symbol == Symbol.identifier) {
-                // Handle identifiers based on whether they are
-                // declared as variables, constants, or functions.
-                val idToken = scanner.token
-                val idType = idTable[idToken]
-                if (idType != null) {
-                    if (idType == IdType.constantId) parseConstValue() else if (idType == IdType.variableId) parseNamedValue() else if (idType == IdType.functionId) parseFunctionCall() else throw error("Identifier \"" + scanner.token
+        if (scanner.symbol == Symbol.notRW) {
+            matchCurrentSymbol()
+            parseFactor()
+        } else if (scanner.symbol!!.isLiteral) {
+            // Handle constant literals separately from constant identifiers.
+            parseConstValue()
+        } else if (scanner.symbol == Symbol.identifier) {
+            // Handle identifiers based on whether they are
+            // declared as variables, constants, or functions.
+            val idToken = scanner.token
+            val idType = idTable[idToken]
+            if (idType != null) {
+                when (idType) {
+                    IdType.constantId -> parseConstValue()
+                    IdType.variableId -> parseNamedValue()
+                    IdType.functionId -> parseFunctionCall()
+                    else -> throw error("Identifier \"" + scanner.token
                             + "\" is not valid as an expression.")
-                } else throw error("Identifier \"" + scanner.token
-                        + "\" has not been declared.")
-            } else if (scanner.symbol == Symbol.leftParen) {
-                matchCurrentSymbol()
-                parseExpression()
-                match(Symbol.rightParen)
-            } else throw error("Invalid expression")
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
-        }
+                }
+            } else throw error("Identifier \"" + scanner.token
+                    + "\" has not been declared.")
+        } else if (scanner.symbol == Symbol.leftParen) {
+            matchCurrentSymbol()
+            parseExpression()
+            match(Symbol.rightParen)
+        } else throw error("Invalid expression")
     }
 
     /**
@@ -788,20 +731,15 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseConstValue() {
-        try {
-            if (scanner.symbol?.isLiteral == true) {
-                parseLiteral()
+        if (scanner.symbol?.isLiteral == true) {
+            parseLiteral()
+        } else {
+            val idType = idTable.get(scanner.token)
+            if (idType == IdType.constantId) {
+                matchCurrentSymbol()
             } else {
-                val idType = idTable.get(scanner.token)
-                if (idType == IdType.constantId) {
-                    matchCurrentSymbol()
-                } else {
-                    throw error("Constant identifier expected")
-                }
+                throw error("Constant identifier expected")
             }
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
         }
     }
 
@@ -811,12 +749,7 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseNamedValue() {
-        try {
-            parseVariableExpr()
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
-        }
+        parseVariableExpr()
     }
 
     /**
@@ -825,18 +758,13 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseFunctionCall() {
-        try {
-            val idType = idTable.get(scanner.token)
-            if (idType != IdType.functionId) {
-                throw error("Function expected")
-            }
-            match(Symbol.identifier)
-            if (scanner.symbol == Symbol.leftParen) {
-                parseActualParameters()
-            }
-        } catch (e: ParserException) {
-            ErrorHandler.getInstance().reportError(e)
-            exit()
+        val idType = idTable.get(scanner.token)
+        if (idType != IdType.functionId) {
+            throw error("Function expected")
+        }
+        match(Symbol.identifier)
+        if (scanner.symbol == Symbol.leftParen) {
+            parseActualParameters()
         }
     }
     // Utility parsing methods
@@ -885,15 +813,6 @@ class Parser(private val scanner: Scanner) {
     private fun internalError(message: String): InternalCompilerException {
         val errorPosition = scanner.token!!.position
         return InternalCompilerException(errorPosition, message)
-    }
-
-    /**
-     * Print an error message and exit the compilation process.
-     */
-    private fun exit() {
-        println("Errors detected -- compilation terminated.")
-        println()
-        System.exit(-1)
     }
 
     /**

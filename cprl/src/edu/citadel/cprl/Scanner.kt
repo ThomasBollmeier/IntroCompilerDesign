@@ -176,9 +176,9 @@ class Scanner(private val source: Source) {
      * specified in the parameter or until end of file is encountered.
      */
     @Throws(IOException::class)
-    fun advanceTo(symbol: Symbol) {
+    fun advanceTo(destSymbol: Symbol) {
         while (true) {
-            if (symbol == symbol || source.char == Source.EOF) return else advance()
+            if (symbol == destSymbol || source.char == Source.EOF) return else advance()
         }
     }
 
