@@ -17,12 +17,17 @@ class Parser(private val scanner: Scanner) {
         /**
          * Symbols that can follow an initial declaration.
          */
-        private val initialDeclFollowers = arrayOf<Symbol>()
+        private val initialDeclFollowers = arrayOf(
+                Symbol.constRW, Symbol.varRW, Symbol.typeRW,
+                Symbol.procedureRW, Symbol.functionRW, Symbol.beginRW
+        )
 
         /**
          * Symbols that can follow a subprogram declaration.
          */
-        private val subprogDeclFollowers = arrayOf<Symbol>()
+        private val subprogDeclFollowers = arrayOf(
+                Symbol.procedureRW, Symbol.functionRW, Symbol.beginRW
+        )
 
         /**
          * Symbols that can follow a statement.
@@ -436,7 +441,16 @@ class Parser(private val scanner: Scanner) {
     @Throws(IOException::class)
     fun parseAssignmentStmt() {
         parseVariable()
-        match(Symbol.assign)
+        try {
+            match(Symbol.assign)
+        } catch (error: ParserException) {
+            if (scanner.symbol == Symbol.equals) {
+                ErrorHandler.getInstance().reportError(error)
+                matchCurrentSymbol()
+            } else {
+                throw error
+            }
+        }
         parseExpression()
         match(Symbol.semicolon)
     }
