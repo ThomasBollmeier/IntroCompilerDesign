@@ -59,15 +59,17 @@ class Parser(private val scanner: Scanner) {
      * `program = declarativePart statementPart "." .`
      */
     @Throws(IOException::class)
-    fun parseProgram() {
-        try {
-            parseDeclarativePart()
-            parseStatementPart()
+    fun parseProgram(): Program? {
+        return try {
+            val declarativePart = parseDeclarativePart()
+            val statementPart = parseStatementPart()
             match(Symbol.dot)
             match(Symbol.EOF)
+            return Program(declarativePart, statementPart)
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             recover(followers = arrayOf(Symbol.EOF))
+            null
         }
     }
 
@@ -76,9 +78,10 @@ class Parser(private val scanner: Scanner) {
      * `declarativePart = initialDecls subprogramDecls .`
      */
     @Throws(IOException::class)
-    fun parseDeclarativePart() {
-        parseInitialDecls()
-        parseSubprogramDecls()
+    fun parseDeclarativePart(): DeclarativePart {
+        val initialDecls = parseInitialDecls()
+        val subprogramDecls = parseSubprogramDecls()
+        return DeclarativePart(initialDecls, subprogramDecls)
     }
 
     /**
@@ -293,10 +296,12 @@ class Parser(private val scanner: Scanner) {
      * `subprogramDecls = ( subprogramDecl )* .`
      */
     @Throws(IOException::class)
-    fun parseSubprogramDecls() {
+    fun parseSubprogramDecls(): List<SubprogramDecl?> {
+        val result = mutableListOf<SubprogramDecl?>()
         while (scanner.symbol?.isSubprogramDeclStarter == true) {
-            parseSubprogramDecl()
+            result.add(parseSubprogramDecl())
         }
+        return result
     }
 
     /**
@@ -304,8 +309,8 @@ class Parser(private val scanner: Scanner) {
      * `subprogramDecl = procedureDecl | functionDecl .`
      */
     @Throws(IOException::class)
-    fun parseSubprogramDecl() {
-        try {
+    fun parseSubprogramDecl(): SubprogramDecl? {
+        return try {
             when (scanner.symbol) {
                 Symbol.procedureRW -> parseProcedureDecl()
                 Symbol.functionRW -> parseFunctionDecl()
@@ -314,9 +319,8 @@ class Parser(private val scanner: Scanner) {
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             recover(followers = subprogDeclFollowers)
+            null
         }
-
-// ...   throw an internal error if the symbol is not one of procedureRW or functionRW
     }
 
     /**
@@ -470,8 +474,8 @@ class Parser(private val scanner: Scanner) {
             when (scanner.symbol) {
                 Symbol.identifier -> {
                     when (idTable.get(scanner.token)) {
-                        IdType.functionId, IdType.procedureId -> parseProcedureCallStmt()
-                        IdType.variableId -> parseAssignmentStmt()
+                        is FunctionDecl, is ProcedureDecl -> parseProcedureCallStmt()
+                        is VarDecl -> parseAssignmentStmt()
                         else -> throw error("Identifier \"${scanner.token?.text}\" cannot start a statement")
                     }
                 }
@@ -598,17 +602,20 @@ class Parser(private val scanner: Scanner) {
      * `expressions = expression ( "," expression )* .`
      */
     @Throws(IOException::class)
-    fun parseExpressions() {
-        try {
+    fun parseExpressions(): List<Expression> {
+        return try {
+            val expressions = mutableListOf<Expression>()
             parseExpression()
             while (scanner.symbol == Symbol.comma) {
                 matchCurrentSymbol()
                 parseExpression()
             }
+            expressions
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             val exprsFollowers = emptyArray<Symbol>()
             recover(exprsFollowers)
+            emptyList()
         }
     }
 
@@ -628,16 +635,20 @@ class Parser(private val scanner: Scanner) {
      * `procedureCallStmt = procId ( actualParameters )? ";" .`
      */
     @Throws(IOException::class)
-    fun parseProcedureCallStmt() {
+    fun parseProcedureCallStmt(): ProcedureCallStmt {
         val idType = idTable.get(scanner.token)
-        if (idType != IdType.procedureId) {
+        if (idType !is ProcedureDecl) {
             throw error("Procedure expected")
         }
+        val procId = scanner.token
         match(Symbol.identifier)
-        if (scanner.symbol == Symbol.leftParen) {
+        val actualParams = if (scanner.symbol == Symbol.leftParen) {
             parseActualParameters()
+        } else {
+            emptyList()
         }
         match(Symbol.semicolon)
+        return ProcedureCallStmt(procId, actualParams, idType)
     }
 
     /**
@@ -645,10 +656,11 @@ class Parser(private val scanner: Scanner) {
      * `actualParameters = "(" expressions ")" .`
      */
     @Throws(IOException::class)
-    fun parseActualParameters() {
+    fun parseActualParameters(): List<Expression> {
         match(Symbol.leftParen)
-        parseExpressions()
+        val expressions = parseExpressions()
         match(Symbol.rightParen)
+        return expressions
     }
 
     /**
@@ -710,12 +722,15 @@ class Parser(private val scanner: Scanner) {
      * logicalOp = "and" | "or" .`
      */
     @Throws(IOException::class)
-    fun parseExpression() {
-        parseRelation()
+    fun parseExpression(): Expression {
+        var result: Expression = parseRelation()
         while (scanner.symbol!!.isLogicalOperator) {
+            val operator = scanner.token
             matchCurrentSymbol()
-            parseRelation()
+            val rightOperand = parseRelation()
+            result = LogicalExpr(result, operator, rightOperand)
         }
+        return result
     }
 
     /**
@@ -724,12 +739,15 @@ class Parser(private val scanner: Scanner) {
      * relationalOp = "=" | "!=" | "<" | "<=" | ">" | ">=" .`
      */
     @Throws(IOException::class)
-    fun parseRelation() {
-        parseSimpleExpr()
-        while (scanner.symbol?.isRelationalOperator == true) {
+    fun parseRelation(): Expression {
+        var result: Expression = parseSimpleExpr()
+        if (scanner.symbol?.isRelationalOperator == true) {
+            val operator = scanner.token
             matchCurrentSymbol()
-            parseSimpleExpr()
+            val rightOperand = parseSimpleExpr()
+            result = RelationalExpr(result, operator, rightOperand)
         }
+        return result
     }
 
     /**
@@ -738,7 +756,7 @@ class Parser(private val scanner: Scanner) {
      * addingOp = "+" | "-" .`
      */
     @Throws(IOException::class)
-    fun parseSimpleExpr() {
+    fun parseSimpleExpr(): Expression {
         if (scanner.symbol?.isAddingOperator == true) {
             matchCurrentSymbol()
         }
