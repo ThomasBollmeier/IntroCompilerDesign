@@ -4,7 +4,9 @@ import edu.citadel.compiler.ErrorHandler
 import edu.citadel.compiler.InternalCompilerException
 import edu.citadel.compiler.ParserException
 import edu.citadel.compiler.Position
+import edu.citadel.cprl.ast.*
 import java.io.IOException
+import java.lang.reflect.Parameter
 import java.util.*
 
 /**
@@ -84,8 +86,14 @@ class Parser(private val scanner: Scanner) {
      * `initialDecls = ( initialDecl )* .`
      */
     @Throws(IOException::class)
-    fun parseInitialDecls() {
-        while (scanner.symbol!!.isInitialDeclStarter) parseInitialDecl()
+    fun parseInitialDecls(): List<InitialDecl?> {
+
+        val result = mutableListOf<InitialDecl?>()
+        while (scanner.symbol!!.isInitialDeclStarter) {
+            result.add(parseInitialDecl())
+        }
+
+        return result
     }
 
     /**
@@ -93,8 +101,8 @@ class Parser(private val scanner: Scanner) {
      * `initialDecl = constDecl | arrayTypeDecl | varDecl .`
      */
     @Throws(IOException::class)
-    fun parseInitialDecl() {
-        try {
+    fun parseInitialDecl(): InitialDecl? {
+        return try {
             when (scanner.symbol) {
                 Symbol.constRW -> parseConstDecl()
                 Symbol.typeRW -> parseArrayTypeDecl()
@@ -104,6 +112,7 @@ class Parser(private val scanner: Scanner) {
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             recover(followers = initialDeclFollowers)
+            null
         }
     }
 
@@ -112,18 +121,19 @@ class Parser(private val scanner: Scanner) {
      * `constDecl = "const" constId ":=" literal ";" .`
      */
     @Throws(IOException::class)
-    fun parseConstDecl() {
-        try {
+    fun parseConstDecl(): ConstDecl? {
+        return try {
             match(Symbol.constRW)
-            val constId = scanner.token
+            val identifier = scanner.token
             match(Symbol.identifier)
-            idTable.add(constId, IdType.constantId)
             match(Symbol.assign)
-            parseLiteral()
+            val literal = parseLiteral()
             match(Symbol.semicolon)
+            ConstDecl(identifier, Type.getTypeOf(literal?.symbol), literal)
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             recover(followers = initialDeclFollowers)
+            null
         }
 
     }
@@ -134,15 +144,19 @@ class Parser(private val scanner: Scanner) {
      * booleanLiteral = "true" | "false" .`
      */
     @Throws(IOException::class)
-    fun parseLiteral() {
-        try {
-            if (scanner.symbol!!.isLiteral)
+    fun parseLiteral(): Token? {
+        return try {
+            if (scanner.symbol!!.isLiteral) {
+                val result = scanner.token
                 matchCurrentSymbol()
+                result
+            }
             else
                 throw error("Invalid literal expression")
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             recover(followers = factorFollowers)
+            null
         }
     }
 
@@ -151,17 +165,24 @@ class Parser(private val scanner: Scanner) {
      * `varDecl = "var" identifiers ":" typeName ";" .`
      */
     @Throws(IOException::class)
-    fun parseVarDecl() {
+    fun parseVarDecl(): VarDecl? {
         try {
             match(Symbol.varRW)
             val identifiers = parseIdentifiers()
             match(Symbol.colon)
-            parseTypeName()
+            val type = parseTypeName()
             match(Symbol.semicolon)
-            for (identifier in identifiers) idTable.add(identifier, IdType.variableId)
+
+            val varDecl = VarDecl(identifiers, type, idTable.currentLevel)
+            for (singleVarDecl in varDecl.singleVarDecls) {
+                idTable.add(singleVarDecl)
+            }
+            return varDecl
+
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             recover(followers = initialDeclFollowers)
+            return null
         }
     }
 
@@ -198,22 +219,25 @@ class Parser(private val scanner: Scanner) {
      * "of" typeName ";" .`
      */
     @Throws(IOException::class)
-    fun parseArrayTypeDecl() {
-        try {
+    fun parseArrayTypeDecl(): ArrayTypeDecl? {
+        return try {
             match(Symbol.typeRW)
             val typeId = scanner.token
             match(Symbol.identifier)
-            idTable.add(typeId, IdType.arrayTypeId)
             match(Symbol.equals)
             match(Symbol.arrayRW)
             match(Symbol.leftBracket)
-            parseConstValue()
+            val numElements = parseConstValue()
             match(Symbol.rightBracket)
             match(Symbol.ofRW)
-            parseTypeName()
+            val elementType = parseTypeName()
+            val result = ArrayTypeDecl(typeId, elementType, numElements)
+            idTable.add(result)
+            result
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             recover(followers = initialDeclFollowers)
+            null
         }
 
     }
@@ -223,19 +247,32 @@ class Parser(private val scanner: Scanner) {
      * `typeName = "Integer" | "Boolean" | "Char" | typeId .`
      */
     @Throws(IOException::class)
-    fun parseTypeName() {
+    fun parseTypeName(): Type {
         try {
             when (scanner.symbol) {
-                Symbol.IntegerRW, Symbol.BooleanRW, Symbol.CharRW -> {
+                Symbol.IntegerRW -> {
                     matchCurrentSymbol()
+                    return Type.Integer
+                }
+                Symbol.BooleanRW -> {
+                    matchCurrentSymbol()
+                    return Type.Boolean
+                }
+                Symbol.CharRW -> {
+                    matchCurrentSymbol()
+                    return Type.Char
                 }
                 Symbol.identifier -> {
                     val typeId = scanner.token
                     matchCurrentSymbol()
                     val idType = idTable[typeId]
                     if (idType != null) {
-                        if (idType != IdType.arrayTypeId) throw error(typeId!!.position, "Identifier \""
-                                + typeId + "\" is not a valid type name.")
+                        return if (idType is ArrayTypeDecl) {
+                            idType.type
+                        } else {
+                            throw error(typeId!!.position, "Identifier \""
+                                    + typeId + "\" is not a valid type name.")
+                        }
                     } else throw error(typeId!!.position, "Identifier \""
                             + typeId + "\" has not been declared.")
                 }
@@ -247,6 +284,7 @@ class Parser(private val scanner: Scanner) {
             ErrorHandler.getInstance().reportError(e)
             recover(followers = arrayOf(Symbol.semicolon, Symbol.comma,
                     Symbol.rightParen, Symbol.isRW))
+            return Type.UNKNOWN
         }
     }
 
@@ -287,25 +325,30 @@ class Parser(private val scanner: Scanner) {
      * "is" initialDecls statementPart procId ";" .`
      */
     @Throws(IOException::class)
-    fun parseProcedureDecl() {
-        try {
+    fun parseProcedureDecl(): ProcedureDecl? {
+        return try {
             match(Symbol.procedureRW)
             val procId = scanner.token
             match(Symbol.identifier)
-            idTable.add(procId, IdType.procedureId)
+            val result = ProcedureDecl(procId)
             idTable.openScope()
-            if (scanner.symbol == Symbol.leftParen) parseFormalParameters()
+            if (scanner.symbol == Symbol.leftParen) {
+                result.formalParams = parseFormalParameters()
+            }
             match(Symbol.isRW)
-            parseInitialDecls()
-            parseStatementPart()
+            result.setInitialDecls(parseInitialDecls())
+            result.statementPart = parseStatementPart()
             idTable.closeScope()
             val procId2 = scanner.token
             match(Symbol.identifier)
             if (procId!!.text != procId2!!.text) throw error(procId2.position, "Procedure name mismatch.")
             match(Symbol.semicolon)
+            idTable.add(result)
+            result
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             recover(followers = subprogDeclFollowers)
+            null
         }
     }
 
@@ -315,27 +358,31 @@ class Parser(private val scanner: Scanner) {
      * "is" initialDecls statementPart funcId ";" .`
      */
     @Throws(IOException::class)
-    fun parseFunctionDecl() {
-        try {
+    fun parseFunctionDecl(): FunctionDecl? {
+        return try {
             match(Symbol.functionRW)
             val funcId = scanner.token
             match(Symbol.identifier)
-            idTable.add(funcId, IdType.functionId)
+            val result = FunctionDecl(funcId)
             idTable.openScope()
-            if (scanner.symbol == Symbol.leftParen) parseFormalParameters()
+            if (scanner.symbol == Symbol.leftParen) {
+                result.formalParams = parseFormalParameters()
+            }
             match(Symbol.returnRW)
-            parseTypeName()
+            val returnType = parseTypeName()
             match(Symbol.isRW)
-            parseInitialDecls()
-            parseStatementPart()
+            result.setInitialDecls(parseInitialDecls())
+            result.statementPart = parseStatementPart()
             idTable.closeScope()
             val funcId2 = scanner.token
             match(Symbol.identifier)
             if (funcId!!.text != funcId2!!.text) throw error(funcId2.position, "Procedure name mismatch.")
             match(Symbol.semicolon)
+            result
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             recover(followers = subprogDeclFollowers)
+            null
         }
     }
 
@@ -344,14 +391,16 @@ class Parser(private val scanner: Scanner) {
      * `formalParameters = "(" parameterDecl ( "," parameterDecl )* ")" .`
      */
     @Throws(IOException::class)
-    fun parseFormalParameters() {
+    fun parseFormalParameters(): List<ParameterDecl> {
+        val result = mutableListOf<ParameterDecl>()
         match(Symbol.leftParen)
-        parseParameterDecl()
+        result.add(parseParameterDecl())
         while (scanner.symbol == Symbol.comma) {
             matchCurrentSymbol()
-            parseParameterDecl()
+            result.add(parseParameterDecl())
         }
         match(Symbol.rightParen)
+        return result
     }
 
     /**
@@ -359,15 +408,20 @@ class Parser(private val scanner: Scanner) {
      * `parameterDecl = ( "var" )? paramId ":" typeName .`
      */
     @Throws(IOException::class)
-    fun parseParameterDecl() {
-        if (scanner.symbol == Symbol.varRW) {
+    fun parseParameterDecl(): ParameterDecl {
+        val isVarParam = if (scanner.symbol == Symbol.varRW) {
             matchCurrentSymbol()
+            true
+        } else {
+            false
         }
         val paramId = scanner.token
         match(Symbol.identifier)
-        idTable.add(paramId, IdType.variableId)
         match(Symbol.colon)
-        parseTypeName()
+        val type = parseTypeName()
+        val result = ParameterDecl(paramId, type, isVarParam)
+        idTable.add(result)
+        return result
     }
 
     /**
@@ -375,14 +429,16 @@ class Parser(private val scanner: Scanner) {
      * `statementPart = "begin" statements "end" .`
      */
     @Throws(IOException::class)
-    fun parseStatementPart() {
-        try {
+    fun parseStatementPart(): StatementPart? {
+        return try {
             match(Symbol.beginRW)
-            parseStatements()
+            val statements = parseStatements()
             match(Symbol.endRW)
+            StatementPart(statements)
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             recover(followers = arrayOf(Symbol.dot, Symbol.identifier))
+            null
         }
     }
 
@@ -391,10 +447,12 @@ class Parser(private val scanner: Scanner) {
      * `statements = ( statement )* .`
      */
     @Throws(IOException::class)
-    fun parseStatements() {
+    fun parseStatements(): List<Statement?> {
+        val result = mutableListOf<Statement?>()
         while (scanner.symbol?.isStmtStarter == true) {
-            parseStatement()
+            result.add(parseStatement())
         }
+        return result
     }
 
     /**
@@ -403,11 +461,11 @@ class Parser(private val scanner: Scanner) {
      * | writeStmt | writelnStmt | procedureCallStmt | returnStmt .`
      */
     @Throws(IOException::class)
-    fun parseStatement() {
+    fun parseStatement(): Statement? {
         // assumes that scanner.getSymbol() can start a statement
         assert(scanner.symbol!!.isStmtStarter) { "Invalid statement." }
 
-        try {
+        return try {
 
             when (scanner.symbol) {
                 Symbol.identifier -> {
@@ -426,11 +484,12 @@ class Parser(private val scanner: Scanner) {
                 Symbol.returnRW -> parseReturnStmt()
                 else -> throw error("Unexpected symbol '${scanner.symbol}'")
             }
-
+            null // TODO: remove
         } catch (error: ParserException) {
             ErrorHandler.getInstance().reportError(error)
             scanner.advanceTo(Symbol.semicolon)
             recover(stmtFollowers)
+            null
         }
     }
 
@@ -744,13 +803,14 @@ class Parser(private val scanner: Scanner) {
      * `constValue = literal | constId .`
      */
     @Throws(IOException::class)
-    fun parseConstValue() {
-        if (scanner.symbol?.isLiteral == true) {
-            parseLiteral()
+    fun parseConstValue(): ConstValue {
+        return if (scanner.symbol?.isLiteral == true) {
+            ConstValue(parseLiteral())
         } else {
             val idType = idTable.get(scanner.token)
-            if (idType == IdType.constantId) {
+            if (idType is ConstDecl) {
                 matchCurrentSymbol()
+                ConstValue(idType.literal)
             } else {
                 throw error("Constant identifier expected")
             }
