@@ -48,7 +48,7 @@ public class LoopStmt extends Statement
      */
     public List<Statement> getStatements()
       {
-// ...
+        return statements;
       }
 
 

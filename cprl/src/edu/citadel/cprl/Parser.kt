@@ -8,6 +8,7 @@ import edu.citadel.cprl.ast.*
 import java.io.IOException
 import java.lang.reflect.Parameter
 import java.util.*
+import kotlin.math.exp
 
 /**
  * This class uses recursive descent to perform syntax analysis of
@@ -53,6 +54,8 @@ class Parser(private val scanner: Scanner) {
     }
 
     private val idTable: IdTable = IdTable()
+    private val subprogramContext = SubprogramContext()
+    private val loopContext = LoopContext()
 
     /**
      * Parse the following grammar rule:<br></br>
@@ -335,6 +338,7 @@ class Parser(private val scanner: Scanner) {
             val procId = scanner.token
             match(Symbol.identifier)
             val result = ProcedureDecl(procId)
+            subprogramContext.beginSubprogramDecl(result)
             idTable.openScope()
             if (scanner.symbol == Symbol.leftParen) {
                 result.formalParams = parseFormalParameters()
@@ -343,6 +347,7 @@ class Parser(private val scanner: Scanner) {
             result.setInitialDecls(parseInitialDecls())
             result.statementPart = parseStatementPart()
             idTable.closeScope()
+            subprogramContext.endSubprogramDecl()
             val procId2 = scanner.token
             match(Symbol.identifier)
             if (procId!!.text != procId2!!.text) throw error(procId2.position, "Procedure name mismatch.")
@@ -368,6 +373,7 @@ class Parser(private val scanner: Scanner) {
             val funcId = scanner.token
             match(Symbol.identifier)
             val result = FunctionDecl(funcId)
+            subprogramContext.beginSubprogramDecl(result)
             idTable.openScope()
             if (scanner.symbol == Symbol.leftParen) {
                 result.formalParams = parseFormalParameters()
@@ -378,6 +384,7 @@ class Parser(private val scanner: Scanner) {
             result.setInitialDecls(parseInitialDecls())
             result.statementPart = parseStatementPart()
             idTable.closeScope()
+            subprogramContext.endSubprogramDecl()
             val funcId2 = scanner.token
             match(Symbol.identifier)
             if (funcId!!.text != funcId2!!.text) throw error(funcId2.position, "Procedure name mismatch.")
@@ -488,7 +495,6 @@ class Parser(private val scanner: Scanner) {
                 Symbol.returnRW -> parseReturnStmt()
                 else -> throw error("Unexpected symbol '${scanner.symbol}'")
             }
-            null // TODO: remove
         } catch (error: ParserException) {
             ErrorHandler.getInstance().reportError(error)
             scanner.advanceTo(Symbol.semicolon)
@@ -502,8 +508,9 @@ class Parser(private val scanner: Scanner) {
      * `assignmentStmt = variable ":=" expression ";" .`
      */
     @Throws(IOException::class)
-    fun parseAssignmentStmt() {
-        parseVariable()
+    fun parseAssignmentStmt(): AssignmentStmt {
+        val variable = parseVariable()
+        val opPosition = scanner.token?.position
         try {
             match(Symbol.assign)
         } catch (error: ParserException) {
@@ -514,8 +521,9 @@ class Parser(private val scanner: Scanner) {
                 throw error
             }
         }
-        parseExpression()
+        val expression = parseExpression()
         match(Symbol.semicolon)
+        return AssignmentStmt(variable, expression, opPosition)
     }
 
     /**
@@ -525,22 +533,27 @@ class Parser(private val scanner: Scanner) {
      * ( "else" statements )? "end" "if" ";" .
     ` */
     @Throws(IOException::class)
-    fun parseIfStmt() {
+    fun parseIfStmt(): IfStmt {
         match(Symbol.ifRW)
-        parseExpression()
+        val condition = parseExpression()
         match(Symbol.thenRW)
-        parseStatements()
+        val thenStmts = parseStatements()
+        val elsifParts = mutableListOf<ElsifPart>()
         while (scanner.symbol == Symbol.elsifRW) {
-            parseExpression()
+            val elsifCondition = parseExpression()
             match(Symbol.thenRW)
-            parseStatements()
+            val elsifStmts = parseStatements()
+            elsifParts.add(ElsifPart(elsifCondition, elsifStmts))
         }
-        if (scanner.symbol == Symbol.elseRW) {
+        val elseStmts = if (scanner.symbol == Symbol.elseRW) {
             parseStatements()
+        } else {
+            emptyList()
         }
         match(Symbol.endRW)
         match(Symbol.ifRW)
         match(Symbol.semicolon)
+        return IfStmt(condition, thenStmts, elsifParts, elseStmts)
     }
 
     /**
@@ -549,16 +562,20 @@ class Parser(private val scanner: Scanner) {
      * statements "end" "loop" ";" .`
      */
     @Throws(IOException::class)
-    fun parseLoopStmt() {
+    fun parseLoopStmt(): LoopStmt {
+        val result = LoopStmt()
         if (scanner.symbol == Symbol.whileRW) {
             matchCurrentSymbol()
-            parseExpression()
+            result.setWhileExpr(parseExpression())
         }
         match(Symbol.loopRW)
-        parseStatements()
+        loopContext.beginLoop(result)
+        result.statements = parseStatements()
+        loopContext.endLoop()
         match(Symbol.endRW)
         match(Symbol.loopRW)
         match(Symbol.semicolon)
+        return result
     }
 
     /**
@@ -566,13 +583,23 @@ class Parser(private val scanner: Scanner) {
      * `exitStmt = "exit" ( "when" booleanExpr )? ";" .`
      */
     @Throws(IOException::class)
-    fun parseExitStmt() {
+    fun parseExitStmt(): ExitStmt {
+        val exitToken = scanner.token
         match(Symbol.exitRW)
-        if (scanner.symbol == Symbol.whenRW) {
+        val exitPosition = exitToken!!.position
+        val whenExpr = if (scanner.symbol == Symbol.whenRW) {
             matchCurrentSymbol()
             parseExpression()
+        } else {
+            null
         }
         match(Symbol.semicolon)
+        return if (loopContext.loopStmt != null) {
+            ExitStmt(whenExpr, loopContext.loopStmt)
+        } else {
+            throw error(exitPosition, "Exit statement is not nested within a loop")
+        }
+
     }
 
     /**
@@ -580,10 +607,11 @@ class Parser(private val scanner: Scanner) {
      * `readStmt = "read" variable ";" .`
      */
     @Throws(IOException::class)
-    fun parseReadStmt() {
+    fun parseReadStmt(): ReadStmt {
         match(Symbol.readRW)
-        parseVariable()
+        val variable = parseVariable()
         match(Symbol.semicolon)
+        return ReadStmt(variable)
     }
 
     /**
@@ -591,10 +619,11 @@ class Parser(private val scanner: Scanner) {
      * `writeStmt = "write" expressions ";" .`
      */
     @Throws(IOException::class)
-    fun parseWriteStmt() {
+    fun parseWriteStmt(): WriteStmt {
         match(Symbol.writeRW)
-        parseExpressions()
+        val exprs = parseExpressions()
         match(Symbol.semicolon)
+        return WriteStmt(exprs)
     }
 
     /**
@@ -624,10 +653,15 @@ class Parser(private val scanner: Scanner) {
      * `writelnStmt = "writeln" ( expressions )? ";" .`
      */
     @Throws(IOException::class)
-    fun parseWritelnStmt() {
+    fun parseWritelnStmt(): WritelnStmt {
         match(Symbol.writelnRW)
-        if (scanner.symbol!!.isExprStarter) parseExpressions()
+        val expressions = if (scanner.symbol!!.isExprStarter) {
+            parseExpressions()
+        } else {
+            emptyList()
+        }
         match(Symbol.semicolon)
+        return WritelnStmt(expressions)
     }
 
     /**
@@ -668,12 +702,19 @@ class Parser(private val scanner: Scanner) {
      * `returnStmt = "return" ( expression )? ";" .`
      */
     @Throws(IOException::class)
-    fun parseReturnStmt() {
+    fun parseReturnStmt(): ReturnStmt {
+        val returnToken = scanner.token
         match(Symbol.returnRW)
-        if (scanner.symbol != Symbol.semicolon) {
+        val returnPos = returnToken!!.position
+        val subprogramDecl = subprogramContext.subprogramDecl
+                ?: throw error(returnPos, "return can only be used in functions or procedures")
+        val returnExpr = if (scanner.symbol != Symbol.semicolon) {
             parseExpression()
+        } else {
+            null
         }
         match(Symbol.semicolon)
+        return ReturnStmt(subprogramDecl, returnExpr, returnPos)
     }
 
     /**
@@ -689,21 +730,27 @@ class Parser(private val scanner: Scanner) {
      * @see .parseNamedValue
      */
     @Throws(IOException::class, ParserException::class)
-    fun parseVariableExpr() {
+    fun parseVariableExpr(): Variable {
         val idToken = scanner.token
         match(Symbol.identifier)
-        val idType = idTable[idToken]
-        if (idType == null) {
-            val errorMsg = "Identifier \"$idToken\" has not been declared."
-            throw error(idToken!!.position, errorMsg)
-        } else if (idType != IdType.variableId) {
-            val errorMsg = "Identifier \"$idToken\" is not a variable."
-            throw error(idToken!!.position, errorMsg)
-        }
-        while (scanner.symbol == Symbol.leftBracket) {
-            matchCurrentSymbol()
-            parseExpression()
-            match(Symbol.rightBracket)
+        return when (val idType = idTable[idToken]) {
+            null -> {
+                val errorMsg = "Identifier \"$idToken\" has not been declared."
+                throw error(idToken!!.position, errorMsg)
+            }
+            !is NamedDecl -> {
+                val errorMsg = "Identifier \"$idToken\" is not a variable."
+                throw error(idToken!!.position, errorMsg)
+            }
+            else -> {
+                val indexExprs = mutableListOf<Expression>()
+                while (scanner.symbol == Symbol.leftBracket) {
+                    matchCurrentSymbol()
+                    indexExprs.add(parseExpression())
+                    match(Symbol.rightBracket)
+                }
+                Variable(idType, idToken!!.position, indexExprs)
+            }
         }
     }
 
@@ -712,8 +759,8 @@ class Parser(private val scanner: Scanner) {
      * `variable = ( varId | paramId ) ( "[" expression "]" )* .`
      */
     @Throws(IOException::class)
-    fun parseVariable() {
-        parseVariableExpr()
+    fun parseVariable(): Variable {
+        return parseVariableExpr()
     }
 
     /**
