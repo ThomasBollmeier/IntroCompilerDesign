@@ -12,9 +12,8 @@ import java.io.IOException;
 /**
  * The abstract syntax tree node for an assignment statement.
  */
-public class AssignmentStmt extends Statement
-  {
-    private Variable   variable;
+public class AssignmentStmt extends Statement {
+    private Variable variable;
     private Expression expr;
 
     // position of the assignment operator (needed for error reporting)
@@ -25,26 +24,25 @@ public class AssignmentStmt extends Statement
      * Construct an assignment statement with a variable, an expression,
      * and the position of the assignment operator.
      *
-     * @param variable  the variable on the left side of the assignment operator
-     * @param expr the expression on the right side of the assignment operator
+     * @param variable       the variable on the left side of the assignment operator
+     * @param expr           the expression on the right side of the assignment operator
      * @param assignPosition the position of the assignment operator (for error reporting)
      */
-    public AssignmentStmt(Variable variable, Expression expr, Position assignPosition)
-      {
-// ...
-      }
+    public AssignmentStmt(Variable variable, Expression expr, Position assignPosition) {
+        this.variable = variable;
+        this.expr = expr;
+        this.assignPosition = assignPosition;
+    }
 
 
     @Override
-    public void checkConstraints()
-      {
+    public void checkConstraints() {
 // ...
-      }
+    }
 
 
     @Override
-    public void emit() throws CodeGenException, IOException
-      {
+    public void emit() throws CodeGenException, IOException {
 // ...
-      }
-  }
+    }
+}

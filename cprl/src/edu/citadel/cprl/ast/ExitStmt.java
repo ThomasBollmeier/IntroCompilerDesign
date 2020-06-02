@@ -12,10 +12,9 @@ import java.io.IOException;
 /**
  * The abstract syntax tree node for an exit statement.
  */
-public class ExitStmt extends Statement
-  {
+public class ExitStmt extends Statement {
     private Expression whenExpr;
-    private LoopStmt   loopStmt;
+    private LoopStmt loopStmt;
 
 
     /**
@@ -23,22 +22,20 @@ public class ExitStmt extends Statement
      * expression (which should be null if there is no "when"
      * expression) and a reference to the enclosing loop statement.
      */
-    public ExitStmt(Expression whenExpr, LoopStmt loopStmt)
-      {
-// ...
-      }
+    public ExitStmt(Expression whenExpr, LoopStmt loopStmt) {
+        this.whenExpr = whenExpr;
+        this.loopStmt = loopStmt;
+    }
 
 
     @Override
-    public void checkConstraints()
-      {
+    public void checkConstraints() {
 // ...
-      }
+    }
 
 
     @Override
-    public void emit() throws CodeGenException, IOException
-      {
+    public void emit() throws CodeGenException, IOException {
 // ...
-      }
-  }
+    }
+}

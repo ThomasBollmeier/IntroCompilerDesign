@@ -12,8 +12,8 @@ import edu.citadel.cprl.Type;
  * The abstract syntax tree node for an array type declaration.
  */
 public class ArrayTypeDecl extends InitialDecl {
-    private ConstValue numElements;
-    private Type elemType;     // type of elements in the array
+    private final ConstValue numElements;
+    private final Type elemType;     // type of elements in the array
 
 
     /**

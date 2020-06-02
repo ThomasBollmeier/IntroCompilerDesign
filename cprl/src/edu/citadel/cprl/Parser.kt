@@ -6,9 +6,7 @@ import edu.citadel.compiler.ParserException
 import edu.citadel.compiler.Position
 import edu.citadel.cprl.ast.*
 import java.io.IOException
-import java.lang.reflect.Parameter
 import java.util.*
-import kotlin.math.exp
 
 /**
  * This class uses recursive descent to perform syntax analysis of
@@ -172,7 +170,7 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseVarDecl(): VarDecl? {
-        try {
+        return try {
             match(Symbol.varRW)
             val identifiers = parseIdentifiers()
             match(Symbol.colon)
@@ -183,12 +181,11 @@ class Parser(private val scanner: Scanner) {
             for (singleVarDecl in varDecl.singleVarDecls) {
                 idTable.add(singleVarDecl)
             }
-            return varDecl
-
+            varDecl
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             recover(followers = initialDeclFollowers)
-            return null
+            null
         }
     }
 
@@ -804,14 +801,22 @@ class Parser(private val scanner: Scanner) {
      */
     @Throws(IOException::class)
     fun parseSimpleExpr(): Expression {
+        var operator: Token? = null
         if (scanner.symbol?.isAddingOperator == true) {
+            operator = scanner.token
             matchCurrentSymbol()
         }
-        parseTerm()
+        var result = parseTerm()
+        if (operator?.symbol == Symbol.minus) {
+            result = NegationExpr(operator, result)
+        }
         while (scanner.symbol?.isAddingOperator == true) {
+            operator = scanner.token
             matchCurrentSymbol()
-            parseTerm()
+            result = AddingExpr(result, operator, parseTerm())
         }
+
+        return result
     }
 
     /**
@@ -820,12 +825,15 @@ class Parser(private val scanner: Scanner) {
      * multiplyingOp = "*" | "/" | "mod" .`
      */
     @Throws(IOException::class)
-    fun parseTerm() {
-        parseFactor()
+    fun parseTerm(): Expression {
+        var result = parseFactor()
         while (scanner.symbol?.isMultiplyingOperator == true) {
+            val operator = scanner.token
             matchCurrentSymbol()
-            parseFactor()
+            result = MultiplyingExpr(result, operator, parseFactor())
         }
+
+        return result
     }
 
     /**
@@ -834,10 +842,11 @@ class Parser(private val scanner: Scanner) {
      * | "(" expression ")" .`
      */
     @Throws(IOException::class)
-    fun parseFactor() {
-        if (scanner.symbol == Symbol.notRW) {
+    fun parseFactor(): Expression {
+        return if (scanner.symbol == Symbol.notRW) {
+            val notOp = scanner.token
             matchCurrentSymbol()
-            parseFactor()
+            NotExpr(notOp, parseFactor())
         } else if (scanner.symbol!!.isLiteral) {
             // Handle constant literals separately from constant identifiers.
             parseConstValue()
@@ -848,9 +857,9 @@ class Parser(private val scanner: Scanner) {
             val idType = idTable[idToken]
             if (idType != null) {
                 when (idType) {
-                    IdType.constantId -> parseConstValue()
-                    IdType.variableId -> parseNamedValue()
-                    IdType.functionId -> parseFunctionCall()
+                    is ConstDecl -> parseConstValue()
+                    is VarDecl -> parseNamedValue()
+                    is FunctionDecl -> parseFunctionCall()
                     else -> throw error("Identifier \"" + scanner.token
                             + "\" is not valid as an expression.")
                 }
@@ -858,8 +867,9 @@ class Parser(private val scanner: Scanner) {
                     + "\" has not been declared.")
         } else if (scanner.symbol == Symbol.leftParen) {
             matchCurrentSymbol()
-            parseExpression()
+            val expression = parseExpression()
             match(Symbol.rightParen)
+            expression
         } else throw error("Invalid expression")
     }
 
@@ -887,24 +897,26 @@ class Parser(private val scanner: Scanner) {
      * `namedValue = variable .`
      */
     @Throws(IOException::class)
-    fun parseNamedValue() {
-        parseVariableExpr()
-    }
+    fun parseNamedValue() = parseVariableExpr()
 
     /**
      * Parse the following grammar rule:<br></br>
      * `functionCall = functId ( actualParameters )? .`
      */
     @Throws(IOException::class)
-    fun parseFunctionCall() {
-        val idType = idTable.get(scanner.token)
-        if (idType != IdType.functionId) {
+    fun parseFunctionCall(): FunctionCall {
+        val funcDecl = idTable.get(scanner.token)
+        if (funcDecl !is FunctionDecl) {
             throw error("Function expected")
         }
+        val funcId = scanner.token
         match(Symbol.identifier)
-        if (scanner.symbol == Symbol.leftParen) {
+        val actualParams = if (scanner.symbol == Symbol.leftParen) {
             parseActualParameters()
+        } else {
+            emptyList()
         }
+        return FunctionCall(funcId, actualParams, funcDecl)
     }
     // Utility parsing methods
     /**
