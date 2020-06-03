@@ -10,36 +10,31 @@ import java.io.IOException;
 /**
  * The abstract syntax tree node for the statement part of a program.
  */
-public class StatementPart extends AST
-  {
+public class StatementPart extends AST {
     private List<Statement> statements;
 
 
     /**
      * Construct a statement part with the specified list of statements.
      */
-    public StatementPart(List<Statement> statements)
-      {
-// ...
-      }
+    public StatementPart(List<Statement> statements) {
+        this.statements = statements;
+    }
 
 
-    public List<Statement> getStatements()
-      {
-// ...
-      }
-
-
-    @Override
-    public void checkConstraints()
-      {
-// ...
-      }
+    public List<Statement> getStatements() {
+        return statements;
+    }
 
 
     @Override
-    public void emit() throws CodeGenException, IOException
-      {
+    public void checkConstraints() {
 // ...
-      }
-  }
+    }
+
+
+    @Override
+    public void emit() throws CodeGenException, IOException {
+// ...
+    }
+}

@@ -66,7 +66,7 @@ class Parser(private val scanner: Scanner) {
             val statementPart = parseStatementPart()
             match(Symbol.dot)
             match(Symbol.EOF)
-            return Program(declarativePart, statementPart)
+            Program(declarativePart, statementPart)
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             recover(followers = arrayOf(Symbol.EOF))
@@ -133,7 +133,9 @@ class Parser(private val scanner: Scanner) {
             match(Symbol.assign)
             val literal = parseLiteral()
             match(Symbol.semicolon)
-            ConstDecl(identifier, Type.getTypeOf(literal?.symbol), literal)
+            val constDecl = ConstDecl(identifier, Type.getTypeOf(literal?.symbol), literal)
+            idTable.add(constDecl)
+            constDecl
         } catch (e: ParserException) {
             ErrorHandler.getInstance().reportError(e)
             recover(followers = initialDeclFollowers)
@@ -479,7 +481,7 @@ class Parser(private val scanner: Scanner) {
                 Symbol.identifier -> {
                     when (idTable.get(scanner.token)) {
                         is FunctionDecl, is ProcedureDecl -> parseProcedureCallStmt()
-                        is VarDecl -> parseAssignmentStmt()
+                        is SingleVarDecl -> parseAssignmentStmt()
                         else -> throw error("Identifier \"${scanner.token?.text}\" cannot start a statement")
                     }
                 }
@@ -858,7 +860,7 @@ class Parser(private val scanner: Scanner) {
             if (idType != null) {
                 when (idType) {
                     is ConstDecl -> parseConstValue()
-                    is VarDecl -> parseNamedValue()
+                    is SingleVarDecl -> parseNamedValue()
                     is FunctionDecl -> parseFunctionCall()
                     else -> throw error("Identifier \"" + scanner.token
                             + "\" is not valid as an expression.")

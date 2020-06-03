@@ -5,9 +5,8 @@ package edu.citadel.cprl;
  * This class encapsulates the language concept of an array type
  * in the programming language CPRL.
  */
-public class ArrayType extends Type
-  {
-    private int  numElements;
+public class ArrayType extends Type {
+    private int numElements;
     private Type elementType;
 
 
@@ -15,27 +14,27 @@ public class ArrayType extends Type
      * Construct an array type with the specified name, number of
      * elements, and the type of elements contained in the array.
      */
-    public ArrayType(String typeName, int numElements, Type elementType)
-      {
+    public ArrayType(String typeName, int numElements, Type elementType) {
 // ...  (Don't forget to call the superclass constructor with the name and size of the array type.)
 // ...  (Question: What is the total size of the array?)
-      }
+        super(typeName, numElements * elementType.getSize());
+        this.numElements = numElements;
+        this.elementType = elementType;
+    }
 
 
     /**
      * Returns the element type for this array type.
      */
-    public Type getElementType()
-      {
-// ...
-      }
+    public Type getElementType() {
+        return elementType;
+    }
 
 
     /**
      * Returns the number of elements for this array type.
      */
-    public int getNumElements()
-      {
-// ...
-      }
-  }
+    public int getNumElements() {
+        return numElements;
+    }
+}

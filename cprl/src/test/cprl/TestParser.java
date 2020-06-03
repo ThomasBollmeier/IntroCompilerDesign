@@ -6,6 +6,7 @@ import edu.citadel.compiler.ErrorHandler;
 
 import edu.citadel.cprl.Scanner;
 import edu.citadel.cprl.Parser;
+import edu.citadel.cprl.ast.Program;
 
 import java.io.*;
 
@@ -73,7 +74,7 @@ public class TestParser
 
         printProgressMessage("Starting compilation...");
 
-        parser.parseProgram();
+        Program program = parser.parseProgram();
 
         if (errorHandler.errorsExist())
             printProgressMessage("Errors detected -- compilation terminated.");
