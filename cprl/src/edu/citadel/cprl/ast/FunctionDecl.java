@@ -57,7 +57,32 @@ public class FunctionDecl extends SubprogramDecl {
      *                   statements are also checked for a return statement.
      */
     private boolean hasReturnStmt(List<Statement> statements) {
-        return false; // TODO
+
+        for (Statement statement: statements) {
+            if (statement instanceof ReturnStmt) {
+                return true;
+            } else if (statement instanceof IfStmt) {
+                IfStmt ifStmt = (IfStmt) statement;
+                if (hasReturnStmt(ifStmt.getThenStmts())) {
+                    return true;
+                }
+                List<ElsifPart> elsifParts = ifStmt.getElsifParts();
+                for (ElsifPart elsifPart: elsifParts) {
+                    if (hasReturnStmt(elsifPart.getThenStmts())) {
+                        return true;
+                    }
+                }
+                if (hasReturnStmt(ifStmt.getElseStmts())) {
+                    return true;
+                }
+            } else if (statement instanceof LoopStmt) {
+                LoopStmt loopStmt = (LoopStmt) statement;
+                if (hasReturnStmt(loopStmt.getStatements())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
 
