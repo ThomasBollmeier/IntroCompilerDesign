@@ -37,7 +37,16 @@ public class AssignmentStmt extends Statement {
 
     @Override
     public void checkConstraints() {
-// ...
+
+        if (!variable.getType().equals(expr.getType())) {
+            try {
+                throw error(assignPosition,
+                        "Types of left and right hand side do not match");
+            } catch (ConstraintException e) {
+                ErrorHandler.getInstance().reportError(e);
+            }
+        }
+
     }
 
 

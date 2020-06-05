@@ -29,7 +29,9 @@ public class StatementPart extends AST {
 
     @Override
     public void checkConstraints() {
-// ...
+        for (Statement statement: statements) {
+            statement.checkConstraints();
+        }
     }
 
 

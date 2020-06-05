@@ -4,6 +4,7 @@ package edu.citadel.cprl.ast;
 import edu.citadel.compiler.ConstraintException;
 import edu.citadel.compiler.ErrorHandler;
 import edu.citadel.cprl.ArrayType;
+import edu.citadel.cprl.Symbol;
 import edu.citadel.cprl.Token;
 import edu.citadel.cprl.Type;
 
@@ -45,6 +46,25 @@ public class ArrayTypeDecl extends InitialDecl {
 
     @Override
     public void checkConstraints() {
-// ...
+
+        try {
+
+            Token literal = numElements.getLiteral();
+
+            if (literal.getSymbol() != Symbol.intLiteral) {
+                throw error(literal.getPosition(),
+                        "Number of array elements must be an integer");
+            }
+
+            int numElementsValue = Integer.parseInt(literal.getText());
+            if (numElementsValue <= 0) {
+                throw error(literal.getPosition(),
+                        "Number of array elements must be positive");
+            }
+
+        } catch (ConstraintException e) {
+            ErrorHandler.getInstance().reportError(e);
+        }
+
     }
 }
