@@ -42,7 +42,14 @@ public class DeclarativePart extends AST {
 
     @Override
     public void checkConstraints() {
-// ...
+
+        for (InitialDecl initialDecl: initialDecls) {
+            initialDecl.checkConstraints();
+        }
+
+        for (SubprogramDecl subprogramDecl: subprogDecls) {
+            subprogramDecl.checkConstraints();
+        }
     }
 
 

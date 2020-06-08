@@ -4,6 +4,7 @@ package edu.citadel.cprl.ast;
 import edu.citadel.compiler.CodeGenException;
 import edu.citadel.compiler.ConstraintException;
 import edu.citadel.compiler.ErrorHandler;
+import edu.citadel.compiler.Position;
 import edu.citadel.cprl.Token;
 
 import java.util.*;
@@ -43,7 +44,29 @@ public class FunctionDecl extends SubprogramDecl {
 
     @Override
     public void checkConstraints() {
-// ...  Hint: See SubprogramDecl
+
+        try {
+
+            super.checkConstraints();
+
+            for (ParameterDecl paramDecl : getFormalParams()) {
+                if (paramDecl.isVarParam()) {
+                    Position position = paramDecl.getPosition();
+                    String errorMsg = "No var parameters are allowed in a function declaration";
+                    throw error(position, errorMsg);
+                }
+            }
+
+            if (!hasReturnStmt(getStatementPart().getStatements())) {
+                Position position = getPosition();
+                String errorMsg = "Function must have at least one return statement";
+                throw error(position, errorMsg);
+            }
+
+        } catch (ConstraintException ce) {
+            ErrorHandler.getInstance().reportError(ce);
+        }
+
     }
 
 

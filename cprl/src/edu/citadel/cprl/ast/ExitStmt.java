@@ -30,7 +30,14 @@ public class ExitStmt extends Statement {
 
     @Override
     public void checkConstraints() {
-// ...
+        try {
+            if (whenExpr != null && whenExpr.getType() != Type.Boolean) {
+                String errorMsg = "Result of when expression must be boolean";
+                throw error(whenExpr.getPosition(), errorMsg);
+            }
+        } catch (ConstraintException ce) {
+            ErrorHandler.getInstance().reportError(ce);
+        }
     }
 
 

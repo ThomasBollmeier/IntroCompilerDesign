@@ -31,6 +31,20 @@ public class ConstDecl extends InitialDecl {
 
     @Override
     public void checkConstraints() {
-// ...
+
+        try {
+            if (getType() == Type.Integer) {
+                try {
+                    Integer.parseInt(literal.getText());
+                } catch (NumberFormatException e) {
+                    throw error(literal.getPosition(),
+                            "Const integer declaration requires integer literal");
+                }
+
+            }
+        } catch (ConstraintException ce) {
+            ErrorHandler.getInstance().reportError(ce);
+        }
+
     }
 }
