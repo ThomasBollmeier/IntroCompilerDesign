@@ -15,26 +15,34 @@ import java.io.IOException;
  * The abstract syntax tree node for a not expression.  A not expression is a unary
  * expression of the form "not expr".  A simple example would be "not isEmtpy()".
  */
-public class NotExpr extends UnaryExpr
-  {
-    public NotExpr(Token operator, Expression operand)
-      {
+public class NotExpr extends UnaryExpr {
+    public NotExpr(Token operator, Expression operand) {
         super(operator, operand);
         assert operator.getSymbol() == Symbol.notRW :
-            "NotExpr: operator is not the reserved word \"not\".";
-      }
+                "NotExpr: operator is not the reserved word \"not\".";
+    }
 
 
     @Override
-    public void checkConstraints()
-      {
-// ...
+    public void checkConstraints() {
+      try {
+
+        Expression operand = getOperand();
+        if (operand.getType() != Type.Boolean) {
+          throw error(operand.getPosition(),
+                  "Not requires operand expression of type Boolean");
+        }
+
+      } catch (ConstraintException ce) {
+        ErrorHandler.getInstance().reportError(ce);
       }
+
+      setType(Type.Boolean);
+    }
 
 
     @Override
-    public void emit() throws CodeGenException, IOException
-      {
+    public void emit() throws CodeGenException, IOException {
 // ...
-      }
-  }
+    }
+}

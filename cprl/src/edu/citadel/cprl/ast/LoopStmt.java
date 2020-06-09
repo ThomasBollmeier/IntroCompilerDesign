@@ -66,7 +66,16 @@ public class LoopStmt extends Statement {
 
     @Override
     public void checkConstraints() {
-// ...
+        try {
+
+            if (whileExpr != null && whileExpr.getType() != Type.Boolean) {
+                throw error(whileExpr.getPosition(),
+                        "While expression should have type Boolean.");
+            }
+
+        } catch (ConstraintException ce) {
+            ErrorHandler.getInstance().reportError(ce);
+        }
     }
 
 

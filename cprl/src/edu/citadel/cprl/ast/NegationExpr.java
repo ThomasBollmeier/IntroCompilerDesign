@@ -16,29 +16,37 @@ import java.io.IOException;
  * expression is a unary expression where the operator is either "-" or "+".
  * A simple example would be "-x".
  */
-public class NegationExpr extends UnaryExpr
-  {
+public class NegationExpr extends UnaryExpr {
     /**
      * Construct a negation expression with the specified operator ("-") and operand.
      */
-    public NegationExpr(Token operator, Expression operand)
-      {
+    public NegationExpr(Token operator, Expression operand) {
         super(operator, operand);
         assert operator.getSymbol() == Symbol.minus :
-            "NegationExpr: operator is not \"-\" operator.";
-      }
+                "NegationExpr: operator is not \"-\" operator.";
+    }
 
 
     @Override
-    public void checkConstraints()
-      {
-// ...
-      }
+    public void checkConstraints() {
+        try {
+
+            Expression operand = getOperand();
+            if (operand.getType() != Type.Integer) {
+                throw error(operand.getPosition(),
+                        "Negation requires expression of type Integer");
+            }
+
+        } catch (ConstraintException ce) {
+            ErrorHandler.getInstance().reportError(ce);
+        }
+
+        setType(Type.Integer);
+    }
 
 
     @Override
-    public void emit() throws CodeGenException, IOException
-      {
+    public void emit() throws CodeGenException, IOException {
 // ...
-      }
-  }
+    }
+}

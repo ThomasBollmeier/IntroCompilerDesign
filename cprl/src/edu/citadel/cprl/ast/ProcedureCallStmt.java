@@ -6,6 +6,7 @@ import edu.citadel.compiler.ConstraintException;
 import edu.citadel.compiler.ErrorHandler;
 import edu.citadel.cprl.Token;
 
+import java.util.Iterator;
 import java.util.List;
 import java.io.IOException;
 
@@ -13,8 +14,7 @@ import java.io.IOException;
 /**
  * The abstract syntax tree node for a procedure call statement.
  */
-public class ProcedureCallStmt extends Statement
-  {
+public class ProcedureCallStmt extends Statement {
     private Token procId;
     private List<Expression> actualParams;
     private ProcedureDecl procDecl;
@@ -27,22 +27,49 @@ public class ProcedureCallStmt extends Statement
      */
     public ProcedureCallStmt(Token procId,
                              List<Expression> actualParams,
-                             ProcedureDecl procDecl)
-      {
+                             ProcedureDecl procDecl) {
 // ...
-      }
+    }
 
 
     @Override
-    public void checkConstraints()
-      {
-// ...
-      }
+    public void checkConstraints() {
+        try {
+
+            List<ParameterDecl> formalParams = procDecl.getFormalParams();
+
+            // check that numbers of parameters match
+            if (actualParams.size() != formalParams.size())
+                throw error(procId.getPosition(), "Incorrect number of actual parameters.");
+
+            // call checkConstraints for each actual parameter
+            for (Expression expr : actualParams)
+                expr.checkConstraints();
+
+            // check that parameter types match
+            Iterator<Expression> iterActual = actualParams.iterator();
+            Iterator<ParameterDecl> iterFormal = formalParams.iterator();
+
+            while (iterActual.hasNext())
+            {
+                Expression    expr  = iterActual.next();
+                ParameterDecl param = iterFormal.next();
+
+                if (!matchTypes(expr.getType(), param.getType()))
+                {
+                    String errorMsg = "Parameter type mismatch.";
+                    throw error(expr.getPosition(), errorMsg);
+                }
+            }
+
+        } catch (ConstraintException ce) {
+            ErrorHandler.getInstance().reportError(ce);
+        }
+    }
 
 
     @Override
-    public void emit() throws CodeGenException, IOException
-      {
+    public void emit() throws CodeGenException, IOException {
 // ...
-      }
-  }
+    }
+}
