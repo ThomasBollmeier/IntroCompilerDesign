@@ -16,8 +16,7 @@ import java.io.IOException;
  * expression is a binary expression where the operator is a relational
  * operator such as "&lt;=" or "&gt;".  A simple example would be "x &lt; 5".
  */
-public class RelationalExpr extends BinaryExpr
-  {
+public class RelationalExpr extends BinaryExpr {
     // labels used during code generation
     private String L1;   // label at start of right operand
     private String L2;   // label at end of the relational expression
@@ -27,28 +26,44 @@ public class RelationalExpr extends BinaryExpr
      * Construct a relational expression with the operator ("=", "&lt;=", etc.)
      * and the two operands.
      */
-    public RelationalExpr(Expression leftOperand, Token operator, Expression rightOperand)
-      {
+    public RelationalExpr(Expression leftOperand, Token operator, Expression rightOperand) {
         super(leftOperand, operator, rightOperand);
 
         assert operator.getSymbol().isRelationalOperator() :
-            "RelationalExpr: operator is not a relational operator";
+                "RelationalExpr: operator is not a relational operator";
 
         L1 = getNewLabel();
         L2 = getNewLabel();
-      }
+    }
 
 
     @Override
-    public void checkConstraints()
-      {
-// ...
+    public void checkConstraints() {
+
+      try {
+
+        Type leftType = getLeftOperand().getType();
+        Type rightType = getRightOperand().getType();
+
+        if (leftType != rightType) {
+          throw error(getOperator().getPosition(),
+                  "Operands in relational expression must have the same type");
+        }
+
+        if (leftType != Type.Integer && leftType != Type.Char && leftType != Type.Boolean) {
+          throw error(getOperator().getPosition(),
+                  "Operands in relational expression must have type Integer, Char or Boolean");
+        }
+
+      } catch (ConstraintException ce) {
+        ErrorHandler.getInstance().reportError(ce);
       }
 
+      setType(Type.Boolean);
+    }
 
     @Override
-    public void emit() throws CodeGenException, IOException
-      {
+    public void emit() throws CodeGenException, IOException {
         emitBranch(false, L1);
 
         // emit true
@@ -65,12 +80,11 @@ public class RelationalExpr extends BinaryExpr
 
         // L2:
         emitLabel(L2);
-      }
+    }
 
 
     @Override
-    public void emitBranch(boolean condition, String label) throws CodeGenException, IOException
-      {
+    public void emitBranch(boolean condition, String label) throws CodeGenException, IOException {
         Token operator = getOperator();
 
         emitOperands();
@@ -79,39 +93,38 @@ public class RelationalExpr extends BinaryExpr
         Symbol operatorSym = operator.getSymbol();
 
         if (operatorSym == Symbol.equals)
-            emit(condition ? "BZ "  + label : "BNZ " + label);
+            emit(condition ? "BZ " + label : "BNZ " + label);
         else if (operatorSym == Symbol.notEqual)
-            emit(condition ? "BNZ " + label : "BZ "  +  label);
+            emit(condition ? "BNZ " + label : "BZ " + label);
         else if (operatorSym == Symbol.lessThan)
-            emit(condition ? "BL "  + label : "BGE " + label);
+            emit(condition ? "BL " + label : "BGE " + label);
         else if (operatorSym == Symbol.lessOrEqual)
-            emit(condition ? "BLE " + label : "BG "  + label);
+            emit(condition ? "BLE " + label : "BG " + label);
         else if (operatorSym == Symbol.greaterThan)
-            emit(condition ? "BG "  + label : "BLE " + label);
+            emit(condition ? "BG " + label : "BLE " + label);
         else if (operatorSym == Symbol.greaterOrEqual)
-            emit(condition ? "BGE " + label : "BL "  + label);
+            emit(condition ? "BGE " + label : "BL " + label);
         else
             throw new CodeGenException(operator.getPosition(), "Invalid relational operator.");
-      }
+    }
 
 
-    private void emitOperands() throws CodeGenException, IOException
-      {
-        Expression leftOperand  = getLeftOperand();
+    private void emitOperands() throws CodeGenException, IOException {
+        Expression leftOperand = getLeftOperand();
         Expression rightOperand = getRightOperand();
 
         // Relational operators compare integers only, so we need to make sure
         // that we have enough bytes on the stack.  Pad with zero bytes.
         int leftOperandSize = leftOperand.getType().getSize();
-        for (int n = 1;  n <= (Type.Integer.getSize() - leftOperandSize);  ++n)
+        for (int n = 1; n <= (Type.Integer.getSize() - leftOperandSize); ++n)
             emit("LDCB 0");
 
         leftOperand.emit();
 
         int rightOperandSize = rightOperand.getType().getSize();
-        for (int n = 1;  n <= (Type.Integer.getSize() - rightOperandSize);  ++n)
+        for (int n = 1; n <= (Type.Integer.getSize() - rightOperandSize); ++n)
             emit("LDCB 0");
 
         rightOperand.emit();
-      }
-  }
+    }
+}

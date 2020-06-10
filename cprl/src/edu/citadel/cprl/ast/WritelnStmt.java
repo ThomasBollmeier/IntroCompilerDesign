@@ -10,24 +10,20 @@ import java.io.IOException;
 /**
  * The abstract syntax tree node for a writeln statement.
  */
-public class WritelnStmt extends OutputStmt
-  {
-    public WritelnStmt(List<Expression> expressions)
-      {
+public class WritelnStmt extends OutputStmt {
+    public WritelnStmt(List<Expression> expressions) {
         super(expressions);
-      }
+    }
 
 
     @Override
-    public void checkConstraints()
-      {
+    public void checkConstraints() {
 // ...
-      }
+    }
 
 
     @Override
-    public void emit() throws CodeGenException, IOException
-      {
+    public void emit() throws CodeGenException, IOException {
 // ...
-      }
-  }
+    }
+}

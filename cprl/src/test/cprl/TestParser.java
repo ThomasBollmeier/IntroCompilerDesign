@@ -82,6 +82,8 @@ public class TestParser
             printProgressMessage("Compilation complete.");
 
         System.out.println();
+
+        program.checkConstraints();
       }
 
 

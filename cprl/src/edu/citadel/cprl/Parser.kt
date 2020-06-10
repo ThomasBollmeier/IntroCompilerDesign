@@ -378,7 +378,7 @@ class Parser(private val scanner: Scanner) {
                 result.formalParams = parseFormalParameters()
             }
             match(Symbol.returnRW)
-            val returnType = parseTypeName()
+            result.type = parseTypeName()
             match(Symbol.isRW)
             result.setInitialDecls(parseInitialDecls())
             result.statementPart = parseStatementPart()
@@ -633,10 +633,10 @@ class Parser(private val scanner: Scanner) {
     fun parseExpressions(): List<Expression> {
         return try {
             val expressions = mutableListOf<Expression>()
-            parseExpression()
+            expressions.add(parseExpression())
             while (scanner.symbol == Symbol.comma) {
                 matchCurrentSymbol()
-                parseExpression()
+                expressions.add(parseExpression())
             }
             expressions
         } catch (e: ParserException) {

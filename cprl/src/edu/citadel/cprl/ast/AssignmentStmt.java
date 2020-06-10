@@ -38,6 +38,9 @@ public class AssignmentStmt extends Statement {
     @Override
     public void checkConstraints() {
 
+        variable.checkConstraints();
+        expr.checkConstraints();
+
         if (!variable.getType().equals(expr.getType())) {
             try {
                 throw error(assignPosition,

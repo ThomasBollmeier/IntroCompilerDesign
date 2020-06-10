@@ -12,8 +12,8 @@ import java.io.IOException;
 /**
  * The abstract syntax tree node for a read statement.
  */
-public class ReadStmt extends Statement
-  {
+public class ReadStmt extends Statement {
+
     private Variable variable;
 
 
@@ -21,23 +21,31 @@ public class ReadStmt extends Statement
      * Construct an input statement with the specified
      * variable for storing the input.
      */
-    public ReadStmt(Variable variable)
-      {
-// ...
-      }
+    public ReadStmt(Variable variable) {
+      this.variable = variable;
+    }
 
 
     @Override
-    public void checkConstraints()
-      {
+    public void checkConstraints() {
         // input is limited to integers and characters
-// ...
+      try {
+
+        Type type = variable.getType();
+
+        if (type != Type.Integer && type != Type.Char) {
+          throw error(variable.getPosition(),
+                  "Type of variable in read statement must be Integer or Character");
+        }
+
+      } catch (ConstraintException ce) {
+        ErrorHandler.getInstance().reportError(ce);
       }
+    }
 
 
     @Override
-    public void emit() throws CodeGenException, IOException
-      {
+    public void emit() throws CodeGenException, IOException {
 // ...
-      }
-  }
+    }
+}
